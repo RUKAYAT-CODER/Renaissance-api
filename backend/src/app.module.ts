@@ -8,6 +8,7 @@ import { Comment } from './comments/entities/comment.entity';
 import { Category } from './categories/entities/category.entity';
 import { Media } from './media/entities/media.entity';
 import configuration from './config/configuration';
+import { AuthModule } from './auth/auth.module';
 import { validate } from './common/config/env.validation';
 
 @Module({
@@ -25,6 +26,7 @@ import { validate } from './common/config/env.validation';
       inject: [ConfigService],
     }),
     TypeOrmModule.forFeature([User, Post, Comment, Category, Media]),
+    AuthModule,
   ],
   controllers: [],
   providers: [],
