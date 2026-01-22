@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { getDatabaseConfig } from './config/database.config';
 import { User } from './users/entities/user.entity';
 import { Post } from './posts/entities/post.entity';
@@ -12,6 +10,8 @@ import { Media } from './media/entities/media.entity';
 import configuration from './config/configuration';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { AuthModule } from './auth/auth.module';
+import { validate } from './common/config/env.validation';
 
 @Module({
   imports: [
@@ -19,6 +19,8 @@ import { APP_GUARD } from '@nestjs/core';
       isGlobal: true,
       load: [configuration],
       envFilePath: ['.env.local', '.env'],
+      validate,
+      cache: true,
     }),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
@@ -38,8 +40,9 @@ import { APP_GUARD } from '@nestjs/core';
       inject: [ConfigService],
     }),
     TypeOrmModule.forFeature([User, Post, Comment, Category, Media]),
+    AuthModule,
   ],
-  controllers: [AppController],
+  controllers: [],
   providers: [
     AppService,
     {
