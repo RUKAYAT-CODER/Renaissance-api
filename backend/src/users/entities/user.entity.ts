@@ -3,6 +3,7 @@ import { BaseEntity } from '../../common/entities/base.entity';
 import { Post } from '../../posts/entities/post.entity';
 import { Comment } from '../../comments/entities/comment.entity';
 import { Bet } from '../../bets/entities/bet.entity';
+import { Transaction } from '../../transactions/entities/transaction.entity';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -66,7 +67,10 @@ export class User extends BaseEntity {
   @Column({ name: 'last_login_at', nullable: true })
   lastLoginAt: Date;
 
-  @OneToMany(() => Post, (post) => post.author, { cascade: true })
+  @Column({ name: 'wallet_balance', type: 'decimal', precision: 18, scale: 8, default: 0 })
+  walletBalance: number;
+
+  @OneToMany(() => Post, (post) => post.author)
   posts: Post[];
 
   @OneToMany(() => Comment, (comment) => comment.author, { cascade: true })
@@ -74,4 +78,7 @@ export class User extends BaseEntity {
 
   @OneToMany(() => Bet, (bet) => bet.user, { cascade: true })
   bets: Bet[];
+
+  @OneToMany(() => Transaction, (transaction) => transaction.user)
+  transactions: Transaction[];
 }

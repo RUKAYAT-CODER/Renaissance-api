@@ -21,6 +21,7 @@ import {
 } from './dto/update-bet-status.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../common/guards/roles.guard';
+import { OwnershipGuard } from '../common/guards/ownership.guard';
 import { UserRole } from '../users/entities/user.entity';
 import { Bet } from './entities/bet.entity';
 
@@ -100,15 +101,12 @@ export class BetsController {
    * GET /bets/:betId
    */
   @Get(':betId')
+  @UseGuards(OwnershipGuard({ entity: Bet, ownerField: 'user' }))
   async getBetById(
     @Param('betId', ParseUUIDPipe) betId: string,
     @Req() req: AuthenticatedRequest,
   ): Promise<Bet> {
-    const isAdmin = req.user.role === UserRole.ADMIN;
-    return this.betsService.getBetById(
-      betId,
-      isAdmin ? undefined : req.user.userId,
-    );
+    return this.betsService.getBetById(betId, req.user.userId);
   }
 
   /**
@@ -143,12 +141,12 @@ export class BetsController {
    * PATCH /bets/:betId/cancel
    */
   @Patch(':betId/cancel')
+  @UseGuards(OwnershipGuard({ entity: Bet, ownerField: 'user' }))
   async cancelBet(
     @Param('betId', ParseUUIDPipe) betId: string,
     @Req() req: AuthenticatedRequest,
   ): Promise<Bet> {
-    const isAdmin = req.user.role === UserRole.ADMIN;
-    return this.betsService.cancelBet(betId, req.user.userId, isAdmin);
+    return this.betsService.cancelBet(betId, req.user.userId, false);
   }
 
   /**

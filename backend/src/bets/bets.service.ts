@@ -15,6 +15,8 @@ import {
 } from '../matches/entities/match.entity';
 import { CreateBetDto } from './dto/create-bet.dto';
 import { UpdateBetStatusDto } from './dto/update-bet-status.dto';
+import { WalletService } from '../wallet/wallet.service';
+import { TransactionType } from '../transactions/entities/transaction.entity';
 
 export interface PaginatedBets {
   data: Bet[];
@@ -32,11 +34,12 @@ export class BetsService {
     @InjectRepository(Match)
     private readonly matchRepository: Repository<Match>,
     private readonly dataSource: DataSource,
+    private readonly walletService: WalletService,
   ) {}
 
   /**
    * Place a bet on a match
-   * Uses transaction to ensure atomic operations
+   * Uses transaction to ensure atomic operations between wallet deduction and bet creation
    */
   async placeBet(userId: string, createBetDto: CreateBetDto): Promise<Bet> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -72,6 +75,23 @@ export class BetsService {
         );
       }
 
+      // Deduct stake amount from user wallet using wallet service
+      // This ensures proper transaction history tracking
+      const walletResult = await this.walletService.updateUserBalance(
+        userId,
+        -Number(createBetDto.stakeAmount), // Negative amount for deduction
+        TransactionType.BET_PLACEMENT,
+        undefined,
+        {
+          matchId: createBetDto.matchId,
+          predictedOutcome: createBetDto.predictedOutcome,
+        }
+      );
+
+      if (!walletResult.success) {
+        throw new BadRequestException(walletResult.error || 'Failed to deduct stake amount from wallet');
+      }
+
       // Calculate odds based on predicted outcome
       const odds = this.getOddsForOutcome(match, createBetDto.predictedOutcome);
 
@@ -90,6 +110,21 @@ export class BetsService {
       });
 
       const savedBet = await queryRunner.manager.save(bet);
+
+      // Update the transaction record with bet ID
+      const transaction = await queryRunner.manager.findOne('transactions', {
+        where: { 
+          userId, 
+          type: TransactionType.BET_PLACEMENT, 
+          status: 'completed' 
+        },
+        order: { createdAt: 'DESC' }
+      });
+
+      if (transaction) {
+        transaction.relatedEntityId = savedBet.id;
+        await queryRunner.manager.save(transaction);
+      }
 
       await queryRunner.commitTransaction();
 
@@ -246,11 +281,11 @@ export class BetsService {
 
   /**
    * Settle all bets for a match based on the match outcome
-   * Uses transaction for atomic operations
+   * Uses transaction for atomic operations including wallet updates
    */
   async settleMatchBets(
     matchId: string,
-  ): Promise<{ settled: number; won: number; lost: number }> {
+  ): Promise<{ settled: number; won: number; lost: number; totalPayout: number }> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -280,17 +315,35 @@ export class BetsService {
       // Get all pending bets for this match
       const pendingBets = await queryRunner.manager.find(Bet, {
         where: { matchId, status: BetStatus.PENDING },
+        relations: ['user'],
       });
 
       let won = 0;
       let lost = 0;
+      let totalPayout = 0;
 
       // Settle each bet
       for (const bet of pendingBets) {
         if (bet.predictedOutcome === match.outcome) {
+          // Winner - distribute payout
           bet.status = BetStatus.WON;
           won++;
+          totalPayout += Number(bet.potentialPayout);
+          
+          // Credit winnings to user wallet
+          await this.walletService.updateUserBalance(
+            bet.userId,
+            Number(bet.potentialPayout),
+            TransactionType.BET_WINNING,
+            bet.id,
+            {
+              matchId: bet.matchId,
+              stakeAmount: Number(bet.stakeAmount),
+              payoutAmount: Number(bet.potentialPayout),
+            }
+          );
         } else {
+          // Loser - no payout
           bet.status = BetStatus.LOST;
           lost++;
         }
@@ -304,6 +357,7 @@ export class BetsService {
         settled: pendingBets.length,
         won,
         lost,
+        totalPayout,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -315,35 +369,64 @@ export class BetsService {
 
   /**
    * Cancel a bet (only if still pending)
+   * Refunds the stake amount to user wallet
    */
   async cancelBet(
     betId: string,
     userId: string,
     isAdmin: boolean = false,
   ): Promise<Bet> {
-    const bet = await this.betRepository.findOne({
-      where: { id: betId },
-    });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (!bet) {
-      throw new NotFoundException('Bet not found');
-    }
+    try {
+      const bet = await queryRunner.manager.findOne(Bet, {
+        where: { id: betId },
+      });
 
-    // Check ownership if not admin
-    if (!isAdmin && bet.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this bet');
-    }
+      if (!bet) {
+        throw new NotFoundException('Bet not found');
+      }
 
-    if (bet.status !== BetStatus.PENDING) {
-      throw new ConflictException(
-        'Cannot cancel bet: Bet has already been settled',
+      // Check ownership if not admin
+      if (!isAdmin && bet.userId !== userId) {
+        throw new ForbiddenException('You do not have access to this bet');
+      }
+
+      if (bet.status !== BetStatus.PENDING) {
+        throw new ConflictException(
+          'Cannot cancel bet: Bet has already been settled',
+        );
+      }
+
+      // Refund stake amount to user wallet
+      await this.walletService.updateUserBalance(
+        bet.userId,
+        Number(bet.stakeAmount),
+        TransactionType.BET_CANCELLATION,
+        bet.id,
+        {
+          matchId: bet.matchId,
+          stakeAmount: Number(bet.stakeAmount),
+          cancellationReason: isAdmin ? 'admin_cancelled' : 'user_cancelled',
+        }
       );
+
+      bet.status = BetStatus.CANCELLED;
+      bet.settledAt = new Date();
+
+      const savedBet = await queryRunner.manager.save(bet);
+
+      await queryRunner.commitTransaction();
+
+      return savedBet;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    bet.status = BetStatus.CANCELLED;
-    bet.settledAt = new Date();
-
-    return this.betRepository.save(bet);
   }
 
   /**
