@@ -21,7 +21,8 @@ import { PlayerCardMetadataModule } from './player-card-metadata/player-card-met
 import { PostsModule } from './posts/posts.module';
 import { PredictionsModule } from './predictions/predictions.module';
 import { validate } from './common/config/env.validation';
-import { BlockchainModule } from './blockchain/blockchain.module';
+import { LeaderboardModule } from './leaderboard/leaderboard.module';
+
 
 @Module({
   imports: [
@@ -61,12 +62,12 @@ import { BlockchainModule } from './blockchain/blockchain.module';
       Prediction,
     ]),
     AuthModule,
-    BlockchainModule,
     BetsModule,
     MatchesModule,
     PlayerCardMetadataModule,
     PostsModule,
     PredictionsModule,
+    LeaderboardModule,
   ],
   controllers: [],
   providers: [
