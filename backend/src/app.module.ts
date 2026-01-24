@@ -12,6 +12,7 @@ import { Match } from './matches/entities/match.entity';
 import { Bet } from './bets/entities/bet.entity';
 import { PlayerCardMetadata } from './player-card-metadata/entities/player-card-metadata.entity';
 import { Prediction } from './predictions/entities/prediction.entity';
+import { Spin } from './spin/entities/spin.entity';
 import configuration from './config/configuration';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -22,6 +23,8 @@ import { PlayerCardMetadataModule } from './player-card-metadata/player-card-met
 import { PostsModule } from './posts/posts.module';
 import { PredictionsModule } from './predictions/predictions.module';
 import { validate } from './common/config/env.validation';
+import { BlockchainModule } from './blockchain/blockchain.module';
+import { SpinModule } from './spin/spin.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 
@@ -63,6 +66,7 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
       Bet,
       PlayerCardMetadata,
       Prediction,
+      Spin,
     ]),
     AuthModule,
     BetsModule,
@@ -70,6 +74,7 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
     PlayerCardMetadataModule,
     PostsModule,
     PredictionsModule,
+    SpinModule,
     LeaderboardModule,
     ReconciliationModule,
   ],
