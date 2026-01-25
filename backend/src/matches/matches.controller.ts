@@ -13,7 +13,11 @@ import {
   DefaultValuePipe,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
 } from '@nestjs/common';
+import { HttpCacheInterceptor } from '../common/cache/interceptors/http-cache.interceptor';
+import { CacheKey } from '../common/cache/decorators/cache-key.decorator';
+import { NoCache } from '../common/cache/decorators/no-cache.decorator';
 import { MatchesService, PaginatedMatches } from './matches.service';
 import { Match, MatchStatus } from './entities/match.entity';
 import {
@@ -27,13 +31,13 @@ import { Roles } from '../common/guards/roles.guard';
 import { UserRole } from '../users/entities/user.entity';
 
 @Controller('matches')
+@UseInterceptors(HttpCacheInterceptor)
 export class MatchesController {
   constructor(private readonly matchesService: MatchesService) {}
 
-  /**
-   * Create a new match (Admin only)
-   */
+  // Create a new match (Admin only) - No Cache needed
   @Post()
+  @NoCache()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async createMatch(@Body() createMatchDto: CreateMatchDto): Promise<Match> {
@@ -44,6 +48,7 @@ export class MatchesController {
    * Get all matches with pagination and filters (Public)
    */
   @Get()
+  @CacheKey('matches')
   async getMatches(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
@@ -77,6 +82,7 @@ export class MatchesController {
    * Get upcoming matches (Public)
    */
   @Get('upcoming')
+  @CacheKey('matches-upcoming')
   async getUpcomingMatches(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
@@ -86,8 +92,12 @@ export class MatchesController {
 
   /**
    * Get live matches (Public)
+   * Real-time data, so we might want a shorter TTL or no cache.
+   * For now, let's cache but we can adjust TTL in the interceptor if needed,
+   * or rely on global TTL.
    */
   @Get('live')
+  @CacheKey('matches-live')
   async getLiveMatches(): Promise<Match[]> {
     return this.matchesService.getLiveMatches();
   }
@@ -96,6 +106,7 @@ export class MatchesController {
    * Get finished matches (Public)
    */
   @Get('finished')
+  @CacheKey('matches-finished')
   async getFinishedMatches(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
@@ -107,6 +118,7 @@ export class MatchesController {
    * Get a specific match by ID (Public)
    */
   @Get(':id')
+  @CacheKey('matches-single')
   async getMatchById(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<Match> {
@@ -117,6 +129,7 @@ export class MatchesController {
    * Update a match (Admin only)
    */
   @Patch(':id')
+  @NoCache()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async updateMatch(
@@ -130,6 +143,7 @@ export class MatchesController {
    * Update match status and scores (Admin only)
    */
   @Patch(':id/status')
+  @NoCache()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async updateMatchStatus(
@@ -143,6 +157,7 @@ export class MatchesController {
    * Cancel a match (Admin only)
    */
   @Delete(':id')
+  @NoCache()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)

@@ -16,6 +16,7 @@ import {
 import { CreateBetDto } from './dto/create-bet.dto';
 import { UpdateBetStatusDto } from './dto/update-bet-status.dto';
 import { WalletService } from '../wallet/wallet.service';
+import { FreeBetVoucherService } from '../free-bet-vouchers/free-bet-vouchers.service';
 import {
   Transaction,
   TransactionType,
@@ -40,8 +41,13 @@ export class BetsService {
     private readonly matchRepository: Repository<Match>,
     private readonly dataSource: DataSource,
     private readonly walletService: WalletService,
+
     private readonly leaderboardService: LeaderboardService,
   ) { }
+
+    private readonly freeBetVoucherService: FreeBetVoucherService,
+  ) {}
+
 
   /**
    * Place a bet on a match
@@ -81,29 +87,46 @@ export class BetsService {
         );
       }
 
-      // Deduct stake amount from user wallet using wallet service
-      // This ensures proper transaction history tracking
-      const walletResult = await this.walletService.updateUserBalance(
-        userId,
-        -Number(createBetDto.stakeAmount), // Negative amount for deduction
-        TransactionType.BET_PLACEMENT,
-        undefined,
-        {
-          matchId: createBetDto.matchId,
-          predictedOutcome: createBetDto.predictedOutcome,
-        },
-      );
-
-      if (!walletResult.success) {
-        throw new BadRequestException(
-          walletResult.error || 'Failed to deduct stake amount from wallet',
-        );
+      // Resolve free bet voucher if provided. Vouchers: non-withdrawable, betting only, auto-consumed on use.
+      let useVoucher = false;
+      let voucherId: string | undefined;
+      if (createBetDto.voucherId) {
+        const voucher =
+          await this.freeBetVoucherService.validateVoucher(
+            createBetDto.voucherId,
+            userId,
+          );
+        const vAmount = Number(voucher.amount);
+        if (Number(createBetDto.stakeAmount) !== vAmount) {
+          throw new BadRequestException(
+            `Stake amount must equal voucher amount (${vAmount}) when using a free bet voucher`,
+          );
+        }
+        useVoucher = true;
+        voucherId = createBetDto.voucherId;
       }
 
-      // Calculate odds based on predicted outcome
-      const odds = this.getOddsForOutcome(match, createBetDto.predictedOutcome);
+      // Deduct from wallet only when not using a voucher (vouchers cannot be withdrawn)
+      if (!useVoucher) {
+        const walletResult = await this.walletService.updateUserBalance(
+          userId,
+          -Number(createBetDto.stakeAmount),
+          TransactionType.BET_PLACEMENT,
+          undefined,
+          {
+            matchId: createBetDto.matchId,
+            predictedOutcome: createBetDto.predictedOutcome,
+          },
+        );
+        if (!walletResult.success) {
+          throw new BadRequestException(
+            walletResult.error || 'Failed to deduct stake amount from wallet',
+          );
+        }
+      }
 
-      // Calculate potential payout
+      // Calculate odds and potential payout
+      const odds = this.getOddsForOutcome(match, createBetDto.predictedOutcome);
       const potentialPayout = Number(createBetDto.stakeAmount) * Number(odds);
 
       // Create the bet
@@ -115,23 +138,36 @@ export class BetsService {
         odds,
         potentialPayout,
         status: BetStatus.PENDING,
+        metadata: useVoucher
+          ? { voucherId, isFreeBet: true }
+          : undefined,
       });
 
       const savedBet = await queryRunner.manager.save(bet);
 
-      // Update the transaction record with bet ID
-      const transaction = await queryRunner.manager.findOne(Transaction, {
-        where: {
+      // Automatically consume voucher on use
+      if (useVoucher && voucherId) {
+        await this.freeBetVoucherService.consumeVoucher(
+          voucherId,
           userId,
-          type: TransactionType.BET_PLACEMENT,
-          status: TransactionStatus.COMPLETED,
-        },
-        order: { createdAt: 'DESC' } as any,
-      });
+          savedBet.id,
+        );
+      }
 
-      if (transaction) {
-        transaction.relatedEntityId = savedBet.id;
-        await queryRunner.manager.save(transaction);
+      // Link wallet transaction to bet (only when wallet was used)
+      if (!useVoucher) {
+        const transaction = await queryRunner.manager.findOne(Transaction, {
+          where: {
+            userId,
+            type: TransactionType.BET_PLACEMENT,
+            status: TransactionStatus.COMPLETED,
+          },
+          order: { createdAt: 'DESC' } as any,
+        });
+        if (transaction) {
+          transaction.relatedEntityId = savedBet.id;
+          await queryRunner.manager.save(transaction);
+        }
       }
 
       await queryRunner.commitTransaction();
@@ -190,6 +226,7 @@ export class BetsService {
 
   /**
    * Get all bets for a specific match with pagination
+   * Optimized to use QueryBuilder for better control over selected fields
    */
   async getMatchBets(
     matchId: string,
@@ -206,26 +243,28 @@ export class BetsService {
 
     const skip = (page - 1) * limit;
 
-    const [data, total] = await this.betRepository.findAndCount({
-      where: { matchId },
-      relations: ['user'],
-      order: { createdAt: 'DESC' },
-      skip,
-      take: limit,
-    });
+    // Use QueryBuilder to select only necessary user fields
+    const queryBuilder = this.betRepository
+      .createQueryBuilder('bet')
+      .leftJoinAndSelect('bet.user', 'user')
+      .select([
+        'bet',
+        'user.id',
+        'user.email',
+        'user.username',
+        'user.firstName',
+        'user.lastName',
+        'user.avatar',
+      ])
+      .where('bet.matchId = :matchId', { matchId })
+      .orderBy('bet.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
 
-    // Remove sensitive user data
-    const sanitizedData = data.map((bet) => {
-      if (bet.user) {
-        const userWithoutSensitive = { ...bet.user };
-        delete (userWithoutSensitive as { password?: string }).password;
-        return { ...bet, user: userWithoutSensitive };
-      }
-      return bet;
-    });
+    const [data, total] = await queryBuilder.getManyAndCount();
 
     return {
-      data: sanitizedData,
+      data,
       total,
       page,
       limit,
@@ -329,9 +368,9 @@ export class BetsService {
       }
 
       // Get all pending bets for this match
+      // Use relations to avoid N+1 when accessing user data
       const pendingBets = await queryRunner.manager.find(Bet, {
         where: { matchId, status: BetStatus.PENDING },
-        relations: ['user'],
       });
 
       let won = 0;
@@ -499,6 +538,7 @@ export class BetsService {
 
   /**
    * Get betting statistics for a user
+   * Optimized to use database aggregation instead of loading all bets into memory
    */
   async getUserBettingStats(userId: string): Promise<{
     totalBets: number;
@@ -510,44 +550,49 @@ export class BetsService {
     totalWon: number;
     winRate: number;
   }> {
-    const bets = await this.betRepository.find({
-      where: { userId },
-    });
+    // Use QueryBuilder for efficient aggregation
+    const stats = await this.betRepository
+      .createQueryBuilder('bet')
+      .select('COUNT(*)', 'totalBets')
+      .addSelect(
+        "SUM(CASE WHEN bet.status = 'pending' THEN 1 ELSE 0 END)",
+        'pendingBets',
+      )
+      .addSelect(
+        "SUM(CASE WHEN bet.status = 'won' THEN 1 ELSE 0 END)",
+        'wonBets',
+      )
+      .addSelect(
+        "SUM(CASE WHEN bet.status = 'lost' THEN 1 ELSE 0 END)",
+        'lostBets',
+      )
+      .addSelect(
+        "SUM(CASE WHEN bet.status = 'cancelled' THEN 1 ELSE 0 END)",
+        'cancelledBets',
+      )
+      .addSelect('SUM(bet.stake_amount)', 'totalStaked')
+      .addSelect(
+        "SUM(CASE WHEN bet.status = 'won' THEN bet.potential_payout ELSE 0 END)",
+        'totalWon',
+      )
+      .where('bet.userId = :userId', { userId })
+      .getRawOne();
 
-    const stats = {
-      totalBets: bets.length,
-      pendingBets: 0,
-      wonBets: 0,
-      lostBets: 0,
-      cancelledBets: 0,
-      totalStaked: 0,
-      totalWon: 0,
-      winRate: 0,
+    const totalBets = parseInt(stats.totalBets) || 0;
+    const wonBets = parseInt(stats.wonBets) || 0;
+    const lostBets = parseInt(stats.lostBets) || 0;
+    const settledBets = wonBets + lostBets;
+    const winRate = settledBets > 0 ? (wonBets / settledBets) * 100 : 0;
+
+    return {
+      totalBets,
+      pendingBets: parseInt(stats.pendingBets) || 0,
+      wonBets,
+      lostBets,
+      cancelledBets: parseInt(stats.cancelledBets) || 0,
+      totalStaked: parseFloat(stats.totalStaked) || 0,
+      totalWon: parseFloat(stats.totalWon) || 0,
+      winRate,
     };
-
-    for (const bet of bets) {
-      stats.totalStaked += Number(bet.stakeAmount);
-
-      switch (bet.status) {
-        case BetStatus.PENDING:
-          stats.pendingBets++;
-          break;
-        case BetStatus.WON:
-          stats.wonBets++;
-          stats.totalWon += Number(bet.potentialPayout);
-          break;
-        case BetStatus.LOST:
-          stats.lostBets++;
-          break;
-        case BetStatus.CANCELLED:
-          stats.cancelledBets++;
-          break;
-      }
-    }
-
-    const settledBets = stats.wonBets + stats.lostBets;
-    stats.winRate = settledBets > 0 ? (stats.wonBets / settledBets) * 100 : 0;
-
-    return stats;
   }
 }

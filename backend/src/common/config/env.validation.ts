@@ -1,6 +1,7 @@
-import { plainToInstance } from 'class-transformer';
+import { plainToInstance, Transform } from 'class-transformer';
 import {
   IsEnum,
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
@@ -47,15 +48,29 @@ class EnvironmentVariables {
   @IsString()
   JWT_EXPIRES_IN: string;
 
-  @IsOptional()
-  @IsString()
-  REDIS_HOST?: string;
 
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(65535)
   REDIS_PORT?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' || value === true)
+  CACHE_ENABLED?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  CACHE_TTL?: number;
+
+  @IsOptional()
+  @IsInt()
+  CACHE_MAX?: number;
+
+  @IsOptional()
+  @IsString()
+  CACHE_STORE?: string;
 
   @IsString()
   @IsOptional()

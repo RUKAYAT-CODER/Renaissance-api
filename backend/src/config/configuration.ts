@@ -18,6 +18,12 @@ export default () => ({
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
   },
+  cache: {
+    enabled: process.env.CACHE_ENABLED === 'true',
+    ttl: parseInt(process.env.CACHE_TTL || '60', 10),
+    max: parseInt(process.env.CACHE_MAX || '100', 10),
+    store: process.env.CACHE_STORE || 'memory',
+  },
   blockchain: {
     stellar: {
       network: process.env.STELLAR_NETWORK || 'TESTNET',

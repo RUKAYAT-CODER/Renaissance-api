@@ -1,4 +1,4 @@
-import { IsUUID, IsNumber, IsEnum, IsPositive, Min } from 'class-validator';
+import { IsUUID, IsNumber, IsEnum, IsPositive, Min, IsOptional } from 'class-validator';
 import { MatchOutcome } from '../../matches/entities/match.entity';
 
 export class CreateBetDto {
@@ -14,4 +14,9 @@ export class CreateBetDto {
     message: 'predictedOutcome must be one of: home_win, away_win, draw',
   })
   predictedOutcome: MatchOutcome;
+
+  /** Optional. Free bet voucher id. When set, stake is taken from voucher (non-withdrawable, betting only); voucher is consumed on use. */
+  @IsOptional()
+  @IsUUID()
+  voucherId?: string;
 }

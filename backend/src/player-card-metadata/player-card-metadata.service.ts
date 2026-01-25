@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere, FindOptionsOrder } from 'typeorm';
 import { PlayerCardMetadata } from './entities/player-card-metadata.entity';
 import { CreatePlayerCardMetadataDto, UpdatePlayerCardMetadataDto } from './dto/create-player-card-metadata.dto';
+import { CacheInvalidationService } from '../common/cache/cache-invalidation.service';
 
 export interface PaginatedPlayerCardMetadata {
   data: PlayerCardMetadata[];
@@ -17,6 +18,7 @@ export class PlayerCardMetadataService {
   constructor(
     @InjectRepository(PlayerCardMetadata)
     private readonly playerCardMetadataRepository: Repository<PlayerCardMetadata>,
+    private readonly cacheInvalidationService: CacheInvalidationService,
   ) {}
 
   /**
@@ -28,7 +30,9 @@ export class PlayerCardMetadataService {
     const playerCardMetadata = this.playerCardMetadataRepository.create(
       createPlayerCardMetadataDto,
     );
-    return this.playerCardMetadataRepository.save(playerCardMetadata);
+    const savedMetadata = await this.playerCardMetadataRepository.save(playerCardMetadata);
+    await this.cacheInvalidationService.invalidatePattern('player-cards*');
+    return savedMetadata;
   }
 
   /**
@@ -165,7 +169,9 @@ export class PlayerCardMetadataService {
     }
 
     Object.assign(playerCardMetadata, updatePlayerCardMetadataDto);
-    return this.playerCardMetadataRepository.save(playerCardMetadata);
+    const savedMetadata = await this.playerCardMetadataRepository.save(playerCardMetadata);
+    await this.cacheInvalidationService.invalidatePattern('player-cards*');
+    return savedMetadata;
   }
 
   /**
@@ -181,6 +187,7 @@ export class PlayerCardMetadataService {
     }
 
     await this.playerCardMetadataRepository.remove(playerCardMetadata);
+    await this.cacheInvalidationService.invalidatePattern('player-cards*');
   }
 
   /**

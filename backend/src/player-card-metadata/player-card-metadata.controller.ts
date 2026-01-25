@@ -14,7 +14,11 @@ import {
   Req,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
 } from '@nestjs/common';
+import { HttpCacheInterceptor } from '../common/cache/interceptors/http-cache.interceptor';
+import { CacheKey } from '../common/cache/decorators/cache-key.decorator';
+import { NoCache } from '../common/cache/decorators/no-cache.decorator';
 import { Request } from 'express';
 import { PlayerCardMetadataService, PaginatedPlayerCardMetadata } from './player-card-metadata.service';
 import { PlayerCardMetadata } from './entities/player-card-metadata.entity';
@@ -35,6 +39,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 @Controller('player-cards')
+@UseInterceptors(HttpCacheInterceptor)
 export class PlayerCardMetadataController {
   constructor(private readonly playerCardMetadataService: PlayerCardMetadataService) {}
 
@@ -43,6 +48,7 @@ export class PlayerCardMetadataController {
    * GET /player-cards
    */
   @Get()
+  @CacheKey('player-cards')
   async findAll(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
@@ -55,6 +61,7 @@ export class PlayerCardMetadataController {
    * GET /player-cards/rarity/:rarity
    */
   @Get('rarity/:rarity')
+  @CacheKey('player-cards-rarity')
   async findByRarity(
     @Param('rarity') rarity: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
@@ -68,6 +75,7 @@ export class PlayerCardMetadataController {
    * GET /player-cards/player/:playerId
    */
   @Get('player/:playerId')
+  @CacheKey('player-cards-player')
   async findByPlayerId(
     @Param('playerId') playerId: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
@@ -81,6 +89,7 @@ export class PlayerCardMetadataController {
    * GET /player-cards/token/:contractAddress/:tokenId
    */
   @Get('token/:contractAddress/:tokenId')
+  @CacheKey('player-cards-token')
   async findByTokenId(
     @Param('contractAddress') contractAddress: string,
     @Param('tokenId') tokenId: string,
@@ -93,6 +102,7 @@ export class PlayerCardMetadataController {
    * GET /player-cards/:id
    */
   @Get(':id')
+  @CacheKey('player-cards-single')
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<PlayerCardMetadata> {
@@ -104,6 +114,7 @@ export class PlayerCardMetadataController {
    * POST /player-cards
    */
   @Post()
+  @NoCache()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.CREATED)
@@ -119,6 +130,7 @@ export class PlayerCardMetadataController {
    * PATCH /player-cards/:id
    */
   @Patch(':id')
+  @NoCache()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async update(
@@ -134,6 +146,7 @@ export class PlayerCardMetadataController {
    * DELETE /player-cards/:id
    */
   @Delete(':id')
+  @NoCache()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)

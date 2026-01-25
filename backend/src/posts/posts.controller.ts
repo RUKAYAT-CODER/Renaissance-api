@@ -9,7 +9,11 @@ import {
   UseGuards,
   ParseUUIDPipe,
   Req,
+  UseInterceptors,
 } from '@nestjs/common';
+import { HttpCacheInterceptor } from '../common/cache/interceptors/http-cache.interceptor';
+import { CacheKey } from '../common/cache/decorators/cache-key.decorator';
+import { NoCache } from '../common/cache/decorators/no-cache.decorator';
 import { Request } from 'express';
 import { PostsService } from './posts.service';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -29,6 +33,7 @@ interface AuthenticatedRequest extends Request {
 
 @Controller('posts')
 @UseGuards(JwtAuthGuard)
+@UseInterceptors(HttpCacheInterceptor)
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
@@ -37,6 +42,7 @@ export class PostsController {
    * POST /posts
    */
   @Post()
+  @NoCache()
   async createPost(
     @Req() req: AuthenticatedRequest,
     @Body() createPostDto: CreatePostDto,
@@ -49,6 +55,7 @@ export class PostsController {
    * GET /posts/:id
    */
   @Get(':id')
+  @CacheKey('posts-single')
   @UseGuards(OwnershipGuard({ entity: PostEntity, ownerField: 'author' }))
   async getPostById(
     @Param('id', ParseUUIDPipe) id: string,
@@ -61,6 +68,7 @@ export class PostsController {
    * PATCH /posts/:id
    */
   @Patch(':id')
+  @NoCache()
   @UseGuards(OwnershipGuard({ entity: PostEntity, ownerField: 'author' }))
   async updatePost(
     @Param('id', ParseUUIDPipe) id: string,
@@ -75,6 +83,7 @@ export class PostsController {
    * DELETE /posts/:id
    */
   @Delete(':id')
+  @NoCache()
   @UseGuards(OwnershipGuard({ entity: PostEntity, ownerField: 'author' }))
   async deletePost(
     @Param('id', ParseUUIDPipe) id: string,
@@ -88,6 +97,7 @@ export class PostsController {
    * GET /posts
    */
   @Get()
+  @CacheKey('posts')
   async getPublishedPosts(): Promise<PostEntity[]> {
     return this.postsService.findPublished();
   }
