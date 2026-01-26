@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, QueryRunner } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import {
   Transaction,
@@ -225,67 +225,94 @@ export class WalletService {
     relatedEntityId?: string,
     metadata?: Record<string, any>,
   ): Promise<WalletOperationResult> {
+    // Use a dedicated QueryRunner so callers that don't provide one still get atomic behavior
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // Get user with lock
-      const user = await queryRunner.manager.findOne(User, {
-        where: { id: userId },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
-
-      // Check if operation would result in negative balance (except for withdrawals which are checked separately)
-      const newBalance = Number(user.walletBalance) + Number(amount);
-      if (
-        newBalance < 0 &&
-        transactionType !== TransactionType.WALLET_WITHDRAWAL
-      ) {
-        throw new BadRequestException(
-          'Insufficient wallet balance for this operation',
-        );
-      }
-
-      // Create transaction record
-      const transaction = queryRunner.manager.create(Transaction, {
+      const result = await this.updateUserBalanceWithQueryRunner(
+        queryRunner,
         userId,
-        type: transactionType,
         amount,
-        status: TransactionStatus.PENDING,
+        transactionType,
         relatedEntityId,
-        metadata: {
-          ...metadata,
-          timestamp: new Date().toISOString(),
-        },
-      });
-
-      const savedTransaction = await queryRunner.manager.save(transaction);
-
-      // Update user balance
-      user.walletBalance = newBalance;
-      await queryRunner.manager.save(user);
-
-      // Mark transaction as completed
-      savedTransaction.status = TransactionStatus.COMPLETED;
-      await queryRunner.manager.save(savedTransaction);
+        metadata,
+      );
 
       await queryRunner.commitTransaction();
-
-      return {
-        success: true,
-        newBalance: Number(user.walletBalance),
-        transactionId: savedTransaction.id,
-      };
+      return result;
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();
     }
+  }
+
+  /**
+   * Update user balance using an existing QueryRunner/transaction.
+   * This method does NOT commit/rollback the provided QueryRunner.
+   * Caller is responsible for transaction lifecycle.
+   */
+  async updateUserBalanceWithQueryRunner(
+    queryRunner: QueryRunner,
+    userId: string,
+    amount: number,
+    transactionType: TransactionType,
+    relatedEntityId?: string,
+    metadata?: Record<string, any>,
+    isWithdrawable: boolean = true,
+  ): Promise<WalletOperationResult> {
+    // Get user with lock
+    const user = await queryRunner.manager.findOne(User, {
+      where: { id: userId },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if operation would result in negative balance (except for withdrawals which are checked separately)
+    const newBalance = Number(user.walletBalance) + Number(amount);
+    if (
+      newBalance < 0 &&
+      transactionType !== TransactionType.WALLET_WITHDRAWAL
+    ) {
+      throw new BadRequestException(
+        'Insufficient wallet balance for this operation',
+      );
+    }
+
+    // Create transaction record
+    const transaction = queryRunner.manager.create(Transaction, {
+      userId,
+      type: transactionType,
+      amount,
+      status: TransactionStatus.PENDING,
+      relatedEntityId,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString(),
+      },
+      isWithdrawable,
+    });
+
+    const savedTransaction = await queryRunner.manager.save(transaction);
+
+    // Update user balance
+    user.walletBalance = newBalance;
+    await queryRunner.manager.save(user);
+
+    // Mark transaction as completed
+    savedTransaction.status = TransactionStatus.COMPLETED;
+    await queryRunner.manager.save(savedTransaction);
+
+    return {
+      success: true,
+      newBalance: Number(user.walletBalance),
+      transactionId: savedTransaction.id,
+    };
   }
 }

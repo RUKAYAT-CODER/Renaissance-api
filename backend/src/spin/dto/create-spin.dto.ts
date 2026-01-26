@@ -11,4 +11,7 @@ export class CreateSpinDto {
   @IsString()
   @IsOptional()
   clientSeed?: string; // Optional client-provided seed for additional randomness
+  @IsOptional()
+  isFreeBet?: boolean; // When true, any payout should be flagged non-withdrawable
+
 }
