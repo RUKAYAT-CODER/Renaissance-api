@@ -35,6 +35,7 @@ import { CacheConfigModule } from './common/cache/cache.module';
 import { AdminModule } from './admin/admin.module';
 
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
+import { UserLeaderboardStats } from './leaderboard/entities/user-leaderboard-stats.entity';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 
 
@@ -78,6 +79,7 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
       FreeBetVoucher,
       Spin,
       SpinSession,
+      UserLeaderboardStats,
     ]),
     AuthModule,
     BetsModule,

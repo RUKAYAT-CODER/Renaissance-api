@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { LeaderboardStats } from './entities/leaderboard-stats.entity';
+import { UserLeaderboardStats } from './entities/user-leaderboard-stats.entity';
 import { LeaderboardService } from './leaderboard.service';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([LeaderboardStats])],
+    imports: [TypeOrmModule.forFeature([LeaderboardStats, UserLeaderboardStats])],
     providers: [LeaderboardService],
     exports: [LeaderboardService],
 })
