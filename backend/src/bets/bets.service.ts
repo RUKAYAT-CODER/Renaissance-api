@@ -22,6 +22,7 @@ import {
   TransactionType,
   TransactionStatus,
 } from '../transactions/entities/transaction.entity';
+import { LeaderboardService } from '../leaderboard/leaderboard.service';
 
 export interface PaginatedBets {
   data: Bet[];
@@ -40,8 +41,13 @@ export class BetsService {
     private readonly matchRepository: Repository<Match>,
     private readonly dataSource: DataSource,
     private readonly walletService: WalletService,
+
+    private readonly leaderboardService: LeaderboardService,
+  ) { }
+
     private readonly freeBetVoucherService: FreeBetVoucherService,
   ) {}
+
 
   /**
    * Place a bet on a match
@@ -317,7 +323,12 @@ export class BetsService {
       bet.settledAt = new Date();
     }
 
-    return this.betRepository.save(bet);
+    const savedBet = await this.betRepository.save(bet);
+
+    // Update leaderboard stats asynchronously
+    this.leaderboardService.updateStatsAfterBetSettlement(savedBet);
+
+    return savedBet;
   }
 
   /**
@@ -397,6 +408,17 @@ export class BetsService {
 
       await queryRunner.commitTransaction();
 
+      // Update leaderboard stats for all settled bets
+      // We run this without awaiting to not block the response, or await if we want to ensure consistency before return.
+      // Given the requirement for efficiency, let's await it but handle errors so it doesn't crash.
+      for (const bet of pendingBets) {
+        try {
+          await this.leaderboardService.updateStatsAfterBetSettlement(bet);
+        } catch (e) {
+          console.error(`Failed to update leaderboard for bet ${bet.id}`, e);
+        }
+      }
+
       return {
         settled: pendingBets.length,
         won,
@@ -407,6 +429,18 @@ export class BetsService {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
+      // Process leaderboard updates for settled bets outside of the transaction block
+      // We do this here (after release) to ensure we don't hold the connection 
+      // but we need the bets data. However, queryRunner is released.
+      // Better to do it after commit but before release if we had the data. 
+      // Actually we have pendingBets list. We can iterate it.
+      // But queryRunner.release() is called in finally.
+      // Let's do it before release but inside a try/catch strictly for leaderboard so it doesn't fail the main request.
+
+      // Since transaction is committed, we can safely update leaderboard.
+      // We will perform this AFTER the transaction block is fully done (conceptually), but 'finally' runs always.
+      // We should check if transaction succeeded, which is hard in finally.
+      // Instead, let's move this logic to BEFORE the finally block, right after commit.
       await queryRunner.release();
     }
   }
