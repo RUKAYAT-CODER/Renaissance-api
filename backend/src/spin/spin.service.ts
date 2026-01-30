@@ -130,11 +130,12 @@ export class SpinService {
         return this.mapToResultDto(existingSpin);
       }
 
-      // Deduct stake amount from wallet
-      const walletResult = await this.walletService.updateUserBalance(
+      // Deduct stake amount from wallet using the same QueryRunner (locks user's row)
+      await this.walletService.updateUserBalanceWithQueryRunner(
+        queryRunner,
         userId,
         -createSpinDto.stakeAmount,
-        TransactionType.BET_PLACEMENT, // Using existing transaction type
+        TransactionType.BET_PLACEMENT,
         undefined,
         {
           spinStake: createSpinDto.stakeAmount,
@@ -173,15 +174,19 @@ export class SpinService {
 
       // If there's a payout, credit it to the user's wallet
       if (payoutAmount > 0) {
-        const payoutResult = await this.walletService.updateUserBalance(
+        const isWithdrawable = !createSpinDto.isFreeBet;
+
+        await this.walletService.updateUserBalanceWithQueryRunner(
+          queryRunner,
           userId,
           payoutAmount,
-          TransactionType.BET_WINNING, // Using existing transaction type
+          TransactionType.BET_WINNING,
           savedSpin.id,
           {
             spinPayout: payoutAmount,
             sessionId,
           },
+          isWithdrawable,
         );
 
         if (!payoutResult.success) {
