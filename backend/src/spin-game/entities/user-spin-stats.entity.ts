@@ -1,17 +1,15 @@
 import { 
   Entity, 
-  PrimaryGeneratedColumn, 
   Column, 
   OneToOne,
-  JoinColumn,
-  UpdateDateColumn
+  JoinColumn
 } from 'typeorm';
+import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('user_spin_stats')
-export class UserSpinStats {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+
+export class UserSpinStats extends BaseEntity {
 
   @Column({ name: 'user_id', type: 'varchar', length: 56, unique: true })
   userId: string;
@@ -56,6 +54,5 @@ export class UserSpinStats {
   @Column({ name: 'last_reset_date', type: 'date' })
   lastResetDate: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  // ...BaseEntity fields: id, createdAt, updatedAt, deletedAt
 }

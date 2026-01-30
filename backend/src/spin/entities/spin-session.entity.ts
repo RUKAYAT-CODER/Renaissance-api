@@ -1,11 +1,10 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
-  CreateDateColumn,
   Index,
   BeforeUpdate,
 } from 'typeorm';
+import { BaseEntity } from '../../common/entities/base.entity';
 
 /**
  * Enum representing the type of reward from a spin session.
@@ -39,9 +38,8 @@ export enum SpinSessionStatus {
 @Entity('spin_sessions')
 @Index(['userId', 'createdAt'])
 @Index(['userId'])
-export class SpinSession {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+
+export class SpinSession extends BaseEntity {
 
   @Column('uuid')
   @Index()
@@ -62,8 +60,7 @@ export class SpinSession {
   @Column('varchar', { length: 255, nullable: true })
   txReference: string | null;
 
-  @CreateDateColumn()
-  createdAt: Date;
+  // ...BaseEntity fields: id, createdAt, updatedAt, deletedAt
 
   /**
    * Prevents updates to completed or failed spin sessions to ensure immutability.

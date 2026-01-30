@@ -1,13 +1,12 @@
 import { 
   Entity, 
-  PrimaryGeneratedColumn, 
   Column, 
-  CreateDateColumn,
   ManyToOne,
   JoinColumn,
   Index,
   Unique
 } from 'typeorm';
+import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 
 export enum NFTTier {
@@ -19,9 +18,8 @@ export enum NFTTier {
 
 @Entity('nft_rewards')
 @Unique(['nftContractAddress', 'nftId'])
-export class NFTReward {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+
+export class NFTReward extends BaseEntity {
 
   @Column({ name: 'user_id', type: 'varchar', length: 56 })
   userId: string;
@@ -58,8 +56,7 @@ export class NFTReward {
   @Column({ name: 'claimed_at', type: 'timestamp', nullable: true })
   claimedAt: Date | null;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  // ...BaseEntity fields: id, createdAt, updatedAt, deletedAt
 
   @Column({ name: 'is_withdrawable', type: 'boolean', default: false })
   isWithdrawable: boolean;

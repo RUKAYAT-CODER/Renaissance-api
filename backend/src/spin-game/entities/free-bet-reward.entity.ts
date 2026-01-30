@@ -1,18 +1,16 @@
 import { 
   Entity, 
-  PrimaryGeneratedColumn, 
   Column, 
-  CreateDateColumn,
   ManyToOne,
   JoinColumn,
   Index
 } from 'typeorm';
+import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('free_bet_rewards')
-export class FreeBetReward {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+
+export class FreeBetReward extends BaseEntity {
 
   @Column({ name: 'user_id', type: 'varchar', length: 56 })
   userId: string;
@@ -43,8 +41,7 @@ export class FreeBetReward {
   @Column({ name: 'spin_game_id', type: 'varchar', nullable: true })
   spinGameId: string | null;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  // ...BaseEntity fields: id, createdAt, updatedAt, deletedAt
 
   @Index()
   @Column({ name: 'is_withdrawable', type: 'boolean', default: false })

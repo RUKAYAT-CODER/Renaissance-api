@@ -1,13 +1,11 @@
 import { 
   Entity, 
-  PrimaryGeneratedColumn, 
   Column, 
-  CreateDateColumn, 
-  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
   Index
 } from 'typeorm';
+import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 
 export enum RewardType {
@@ -25,9 +23,8 @@ export enum SpinStatus {
 }
 
 @Entity('spin_games')
-export class SpinGame {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+
+export class SpinGame extends BaseEntity {
 
   @Column({ name: 'user_id', type: 'varchar', length: 56 })
   userId: string;
@@ -81,11 +78,7 @@ export class SpinGame {
   })
   status: SpinStatus;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  // ...BaseEntity fields: id, createdAt, updatedAt, deletedAt
 
   @Index()
   @Column({ name: 'is_suspicious', type: 'boolean', default: false })
