@@ -1,4 +1,5 @@
 import { Column, Entity, ManyToOne, JoinColumn, Index } from 'typeorm';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { Match } from '../../matches/entities/match.entity';
@@ -20,15 +21,33 @@ export enum BetStatus {
 @Index(['matchId', 'status'])
 @Index(['settledAt'])
 export class Bet extends BaseEntity {
+  @ApiProperty({
+    description: 'ID of the user who placed the bet',
+    example: '456e7890-e12b-34d5-a678-901234567890',
+  })
   @Column({ name: 'user_id' })
   userId: string;
 
+  @ApiProperty({
+    description: 'ID of the match the bet was placed on',
+    example: '789e0123-e45b-67d8-a901-234567890123',
+  })
   @Column({ name: 'match_id', nullable: true })
   matchId: string;
 
+  @ApiProperty({
+    description: 'Amount staked on the bet',
+    example: 100.5,
+    type: Number,
+  })
   @Column({ name: 'stake_amount', type: 'decimal', precision: 18, scale: 8 })
   stakeAmount: number;
 
+  @ApiProperty({
+    description: 'User prediction for the match outcome',
+    enum: MatchOutcome,
+    example: MatchOutcome.HOME_WIN,
+  })
   @Column({
     name: 'predicted_outcome',
     type: 'enum',
@@ -36,9 +55,19 @@ export class Bet extends BaseEntity {
   })
   predictedOutcome: MatchOutcome;
 
+  @ApiProperty({
+    description: 'Odds at the time the bet was placed',
+    example: 2.5,
+    type: Number,
+  })
   @Column({ type: 'decimal', precision: 5, scale: 2 })
   odds: number;
 
+  @ApiProperty({
+    description: 'Potential payout if the bet wins (stake * odds)',
+    example: 251.25,
+    type: Number,
+  })
   @Column({
     name: 'potential_payout',
     type: 'decimal',
@@ -47,6 +76,12 @@ export class Bet extends BaseEntity {
   })
   potentialPayout: number;
 
+  @ApiProperty({
+    description: 'Current status of the bet',
+    enum: BetStatus,
+    example: BetStatus.PENDING,
+    default: BetStatus.PENDING,
+  })
   @Column({
     type: 'enum',
     enum: BetStatus,
@@ -54,16 +89,34 @@ export class Bet extends BaseEntity {
   })
   status: BetStatus;
 
+  @ApiPropertyOptional({
+    description: 'Timestamp when the bet was settled',
+    example: '2024-01-20T20:00:00Z',
+    nullable: true,
+  })
   @Column({ name: 'settled_at', nullable: true })
   settledAt: Date;
 
+  @ApiPropertyOptional({
+    description: 'Additional metadata for the bet',
+    example: { source: 'mobile_app', promocode: 'WELCOME10' },
+    nullable: true,
+  })
   @Column({ type: 'json', nullable: true })
   metadata: Record<string, any>;
 
+  @ApiPropertyOptional({
+    description: 'User who placed the bet',
+    type: () => User,
+  })
   @ManyToOne(() => User, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @ApiPropertyOptional({
+    description: 'Match the bet was placed on',
+    type: () => Match,
+  })
   @ManyToOne(() => Match, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'match_id' })
   match: Match;

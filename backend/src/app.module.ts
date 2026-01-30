@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -26,7 +26,6 @@ import { PostsModule } from './posts/posts.module';
 import { PredictionsModule } from './predictions/predictions.module';
 import { FreeBetVouchersModule } from './free-bet-vouchers/free-bet-vouchers.module';
 import { validate } from './common/config/env.validation';
-import { BlockchainModule } from './blockchain/blockchain.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { LeaderboardsModule } from './leaderboards/leaderboards.module';
 import { SpinModule } from './spin/spin.module';
@@ -35,7 +34,11 @@ import { CacheConfigModule } from './common/cache/cache.module';
 import { AdminModule } from './admin/admin.module';
 
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
+import { UserLeaderboardStats } from './leaderboard/entities/user-leaderboard-stats.entity';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
+
+import { LoggerModule } from './common/logger/logger.module';
+import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
 
 @Module({
@@ -63,7 +66,8 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => getTypeOrmConfig(configService),
+      useFactory: (configService: ConfigService) =>
+        getTypeOrmConfig(configService),
     }),
     TypeOrmModule.forFeature([
       User,
@@ -78,6 +82,7 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
       FreeBetVoucher,
       Spin,
       SpinSession,
+      UserLeaderboardStats,
     ]),
     AuthModule,
     BetsModule,
@@ -94,6 +99,7 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
     CacheConfigModule,
     AdminModule,
     ReconciliationModule,
+    LoggerModule,
   ],
   controllers: [],
   providers: [
@@ -103,4 +109,8 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {
+    configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

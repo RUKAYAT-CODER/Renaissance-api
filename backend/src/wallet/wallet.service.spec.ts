@@ -1,15 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { WalletService } from './wallet.service';
 import { User } from '../users/entities/user.entity';
-import { Transaction, TransactionType } from '../transactions/entities/transaction.entity';
+import {
+  Transaction,
+  TransactionType,
+} from '../transactions/entities/transaction.entity';
 
 describe('WalletService', () => {
   let service: WalletService;
-  let userRepository: Repository<User>;
-  let transactionRepository: Repository<Transaction>;
-  let dataSource: DataSource;
 
   const mockUserRepository = {
     findOne: jest.fn(),
@@ -57,11 +57,6 @@ describe('WalletService', () => {
     }).compile();
 
     service = module.get<WalletService>(WalletService);
-    userRepository = module.get<Repository<User>>(getRepositoryToken(User));
-    transactionRepository = module.get<Repository<Transaction>>(
-      getRepositoryToken(Transaction),
-    );
-    dataSource = module.get<DataSource>(DataSource);
   });
 
   afterEach(() => {

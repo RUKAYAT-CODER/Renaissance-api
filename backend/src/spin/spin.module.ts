@@ -7,13 +7,12 @@ import { Spin } from './entities/spin.entity';
 import { SpinSession } from './entities/spin-session.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { Transaction } from '../transactions/entities/transaction.entity';
+import { User } from 'src/users/entities/user.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Spin, SpinSession, Transaction]),
-  ],
+  imports: [TypeOrmModule.forFeature([User, Spin, SpinSession, Transaction])],
   controllers: [SpinController],
   providers: [SpinService, SpinSessionService, WalletService],
-  exports: [SpinService, SpinSessionService],
+  exports: [SpinService, SpinSessionService, WalletService],
 })
-export class SpinModule { }
+export class SpinModule {}

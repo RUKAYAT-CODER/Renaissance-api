@@ -12,10 +12,6 @@ export class LeaderboardController {
     @Query('page') page = 1,
     @Query('limit') limit = 10,
   ) {
-    return this.service.getLeaderboard(
-      type,
-      Number(page),
-      Number(limit),
-    );
+    return this.service.getLeaderboard(type, Number(page), Number(limit));
   }
 }

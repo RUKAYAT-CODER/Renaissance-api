@@ -93,6 +93,8 @@ export class User extends BaseEntity {
   @OneToMany(() => Transaction, (transaction) => transaction.user)
   transactions: Transaction[];
 
-  @OneToMany(() => Prediction, (prediction) => prediction.user, { cascade: true })
+  @OneToMany(() => Prediction, (prediction) => prediction.user, {
+    cascade: true,
+  })
   predictions: Prediction[];
 }

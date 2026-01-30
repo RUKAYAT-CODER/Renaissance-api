@@ -11,11 +11,7 @@ import { Spin, SpinStatus, SpinOutcome } from './entities/spin.entity';
 import { CreateSpinDto } from './dto/create-spin.dto';
 import { SpinResultDto } from './dto/spin-result.dto';
 import { WalletService } from '../wallet/wallet.service';
-import {
-  Transaction,
-  TransactionType,
-  TransactionStatus,
-} from '../transactions/entities/transaction.entity';
+import { TransactionType } from '../transactions/entities/transaction.entity';
 
 /**
  * Interface defining the structure of weighted outcomes for the spin wheel.
@@ -57,27 +53,30 @@ export class SpinService {
    * - No Win (0x payout): 49.5% chance
    */
   private readonly outcomeWeights: WeightedOutcome[] = [
-    { outcome: SpinOutcome.JACKPOT, weight: 5, multiplier: 50 },     // 0.5% chance
-    { outcome: SpinOutcome.HIGH_WIN, weight: 50, multiplier: 10 },    // 5% chance
-    { outcome: SpinOutcome.MEDIUM_WIN, weight: 150, multiplier: 3 },  // 15% chance
+    { outcome: SpinOutcome.JACKPOT, weight: 5, multiplier: 50 }, // 0.5% chance
+    { outcome: SpinOutcome.HIGH_WIN, weight: 50, multiplier: 10 }, // 5% chance
+    { outcome: SpinOutcome.MEDIUM_WIN, weight: 150, multiplier: 3 }, // 15% chance
     { outcome: SpinOutcome.SMALL_WIN, weight: 300, multiplier: 1.5 }, // 30% chance
-    { outcome: SpinOutcome.NO_WIN, weight: 495, multiplier: 0 },      // 49.5% chance
+    { outcome: SpinOutcome.NO_WIN, weight: 495, multiplier: 0 }, // 49.5% chance
   ];
 
   /** Total weight for normalization - must equal sum of all outcome weights */
-  private readonly totalWeight = this.outcomeWeights.reduce((sum, item) => sum + item.weight, 0);
+  private readonly totalWeight = this.outcomeWeights.reduce(
+    (sum, item) => sum + item.weight,
+    0,
+  );
 
   constructor(
     @InjectRepository(Spin)
     private readonly spinRepository: Repository<Spin>,
-    @InjectRepository(Transaction)
-    private readonly transactionRepository: Repository<Transaction>,
     private readonly dataSource: DataSource,
     private readonly walletService: WalletService,
   ) {
     // Validate configuration on startup to prevent runtime errors
     if (this.totalWeight !== 1000) {
-      throw new Error(`Invalid outcome weights configuration. Total weight must be 1000, got ${this.totalWeight}`);
+      throw new Error(
+        `Invalid outcome weights configuration. Total weight must be 1000, got ${this.totalWeight}`,
+      );
     }
     this.logger.log('SpinService initialized with validated outcome weights');
   }
@@ -108,7 +107,10 @@ export class SpinService {
    * @throws BadRequestException - If stake amount is invalid or insufficient funds
    * @throws ConflictException - If replay attempt is detected
    */
-  async executeSpin(userId: string, createSpinDto: CreateSpinDto): Promise<SpinResultDto> {
+  async executeSpin(
+    userId: string,
+    createSpinDto: CreateSpinDto,
+  ): Promise<SpinResultDto> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -141,8 +143,16 @@ export class SpinService {
         },
       );
 
+      if (!walletResult.success) {
+        throw new BadRequestException(
+          walletResult.error || 'Failed to deduct stake amount from wallet',
+        );
+      }
+
       // Generate cryptographically secure random outcome
-      const { outcome, payoutAmount, randomSeed } = this.generateSecureOutcome(createSpinDto.stakeAmount);
+      const { outcome, payoutAmount, randomSeed } = this.generateSecureOutcome(
+        createSpinDto.stakeAmount,
+      );
 
       // Create spin record
       const spin = queryRunner.manager.create(Spin, {
@@ -178,14 +188,23 @@ export class SpinService {
           },
           isWithdrawable,
         );
+
+        if (!payoutResult.success) {
+          this.logger.error(
+            `Failed to credit payout for spin ${savedSpin.id}`,
+            payoutResult.error,
+          );
+          // Don't throw here - spin is valid, just log the payout failure
+        }
       }
 
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Spin executed successfully: ${savedSpin.id}, outcome: ${outcome}, payout: ${payoutAmount}`);
+      this.logger.log(
+        `Spin executed successfully: ${savedSpin.id}, outcome: ${outcome}, payout: ${payoutAmount}`,
+      );
 
       return this.mapToResultDto(savedSpin);
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
 
@@ -255,7 +274,9 @@ export class SpinService {
     }
 
     // Fallback (should never reach here with proper configuration)
-    this.logger.error('Random outcome generation failed - using NO_WIN fallback');
+    this.logger.error(
+      'Random outcome generation failed - using NO_WIN fallback',
+    );
     return {
       outcome: SpinOutcome.NO_WIN,
       payoutAmount: 0,
@@ -284,11 +305,14 @@ export class SpinService {
    */
   private generateSessionId(userId: string, dto: CreateSpinDto): string {
     const timestamp = Date.now().toString();
-    const components = [userId, timestamp, dto.clientSeed || '', dto.stakeAmount.toString()];
+    const components = [
+      userId,
+      timestamp,
+      dto.clientSeed || '',
+      dto.stakeAmount.toString(),
+    ];
 
-    return createHash('sha256')
-      .update(components.join('|'))
-      .digest('hex');
+    return createHash('sha256').update(components.join('|')).digest('hex');
   }
 
   /**
@@ -346,7 +370,10 @@ export class SpinService {
    * @param limit - Maximum number of spins to return (default: 50)
    * @returns Array of spin records ordered by creation date
    */
-  async getUserSpinHistory(userId: string, limit: number = 50): Promise<Spin[]> {
+  async getUserSpinHistory(
+    userId: string,
+    limit: number = 50,
+  ): Promise<Spin[]> {
     return this.spinRepository.find({
       where: { userId },
       order: { createdAt: 'DESC' },
@@ -375,14 +402,21 @@ export class SpinService {
 
     const stats = {
       totalSpins: spins.length,
-      totalStaked: spins.reduce((sum, spin) => sum + Number(spin.stakeAmount), 0),
-      totalPaidOut: spins.reduce((sum, spin) => sum + Number(spin.payoutAmount), 0),
+      totalStaked: spins.reduce(
+        (sum, spin) => sum + Number(spin.stakeAmount),
+        0,
+      ),
+      totalPaidOut: spins.reduce(
+        (sum, spin) => sum + Number(spin.payoutAmount),
+        0,
+      ),
       outcomeCounts: {} as Record<string, number>,
     };
 
     // Count outcomes
     for (const spin of spins) {
-      stats.outcomeCounts[spin.outcome] = (stats.outcomeCounts[spin.outcome] || 0) + 1;
+      stats.outcomeCounts[spin.outcome] =
+        (stats.outcomeCounts[spin.outcome] || 0) + 1;
     }
 
     return stats;

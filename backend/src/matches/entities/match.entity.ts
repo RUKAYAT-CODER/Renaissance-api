@@ -24,6 +24,7 @@ export class Match extends BaseEntity {
   @Column({
     type: 'enum',
     enum: MatchStatus,
+    enumName: 'match_status_enum',
     default: MatchStatus.UPCOMING,
   })
   status: MatchStatus;
@@ -37,6 +38,7 @@ export class Match extends BaseEntity {
   @Column({
     type: 'enum',
     enum: MatchOutcome,
+    enumName: 'match_outcome_enum',
     nullable: true,
   })
   outcome: MatchOutcome;

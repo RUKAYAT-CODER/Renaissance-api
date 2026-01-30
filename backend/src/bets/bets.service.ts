@@ -91,11 +91,10 @@ export class BetsService {
       let useVoucher = false;
       let voucherId: string | undefined;
       if (createBetDto.voucherId) {
-        const voucher =
-          await this.freeBetVoucherService.validateVoucher(
-            createBetDto.voucherId,
-            userId,
-          );
+        const voucher = await this.freeBetVoucherService.validateVoucher(
+          createBetDto.voucherId,
+          userId,
+        );
         const vAmount = Number(voucher.amount);
         if (Number(createBetDto.stakeAmount) !== vAmount) {
           throw new BadRequestException(
@@ -138,9 +137,7 @@ export class BetsService {
         odds,
         potentialPayout,
         status: BetStatus.PENDING,
-        metadata: useVoucher
-          ? { voucherId, isFreeBet: true }
-          : undefined,
+        metadata: useVoucher ? { voucherId, isFreeBet: true } : undefined,
       });
 
       const savedBet = await queryRunner.manager.save(bet);

@@ -1,9 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 export enum SpinStatus {
   PENDING = 'pending',
   COMPLETED = 'completed',
-  FAILED = 'failed'
+  FAILED = 'failed',
 }
 
 export enum SpinOutcome {
@@ -11,7 +18,7 @@ export enum SpinOutcome {
   HIGH_WIN = 'high_win',
   MEDIUM_WIN = 'medium_win',
   SMALL_WIN = 'small_win',
-  NO_WIN = 'no_win'
+  NO_WIN = 'no_win',
 }
 
 @Entity('spins')
@@ -26,7 +33,7 @@ export class Spin {
   userId: string;
 
   @Column('varchar', { length: 255, unique: true })
-  sessionId: string; // Unique session identifier to prevent replays
+  sessionId: string;
 
   @Column('decimal', { precision: 10, scale: 2 })
   stakeAmount: number;

@@ -3,58 +3,82 @@ import {
   Post,
   Get,
   Body,
-  Param,
   UseGuards,
   Request,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SpinService } from './spin.service';
 import { CreateSpinDto } from './dto/create-spin.dto';
 import { SpinResultDto } from './dto/spin-result.dto';
 
 /**
- * Controller for secure spin operations
+ * Controller for secure spin operations with provably fair randomness
  *
- * API Endpoints:
- * - POST /spin - Execute a secure spin
- * - GET /spin/history - Get user's spin history
- * - GET /spin/stats - Get spin statistics (admin)
- *
- * Security:
- * - All endpoints require JWT authentication
- * - Server-side randomness with no client influence
+ * Security Features:
+ * - Server-side cryptographic randomness (crypto.randomBytes)
+ * - No client influence on outcomes
  * - Idempotent operations prevent replay attacks
- * - Rate limiting applied via global throttle guard
+ * - Rate limiting via global throttle guard
+ * - Atomic wallet operations with rollback
  */
+@ApiTags('Spin')
 @Controller('spin')
 @UseGuards(JwtAuthGuard)
+@ApiBearerAuth('JWT-auth')
 export class SpinController {
   constructor(private readonly spinService: SpinService) {}
 
-  /**
-   * Execute a spin with secure server-side randomness
-   *
-   * Request Body:
-   * - stakeAmount: Amount to stake (0.01 to 1000)
-   * - clientSeed: Optional client-provided seed for additional entropy
-   *
-   * Response:
-   * - id: Unique spin identifier
-   * - outcome: Spin result (jackpot, high_win, etc.)
-   * - payoutAmount: Amount won (0 if no win)
-   * - stakeAmount: Amount staked
-   * - netResult: Net gain/loss (payout - stake)
-   * - timestamp: When spin occurred
-   *
-   * Security Notes:
-   * - Randomness is server-generated using crypto.randomBytes()
-   * - Session-based idempotency prevents duplicate executions
-   * - All wallet operations are atomic with rollback on failure
-   */
   @Post()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Execute a spin',
+    description:
+      'Performs a secure spin with server-side randomness. Stake is deducted and payout is credited based on the outcome. Uses cryptographic randomness for fairness.',
+  })
+  @ApiBody({ type: CreateSpinDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Spin executed successfully',
+    type: SpinResultDto,
+    schema: {
+      example: {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        outcome: 'high_win',
+        payoutAmount: 50.0,
+        stakeAmount: 10.0,
+        netResult: 40.0,
+        timestamp: '2024-01-15T10:30:00Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - insufficient balance or invalid stake amount',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Insufficient balance to place spin',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests - rate limit exceeded',
+  })
   async executeSpin(
     @Request() req: any,
     @Body() createSpinDto: CreateSpinDto,
@@ -63,20 +87,45 @@ export class SpinController {
     return this.spinService.executeSpin(userId, createSpinDto);
   }
 
-  /**
-   * Get user's spin history for transparency and audit
-   *
-   * Returns recent spins ordered by creation date (newest first).
-   * Limited to 50 most recent spins for performance.
-   * Includes sanitized data without sensitive internal metadata.
-   */
   @Get('history')
+  @ApiOperation({
+    summary: 'Get user spin history',
+    description:
+      'Retrieves the 50 most recent spins for the authenticated user. Provides transparency and audit trail.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Spin history retrieved successfully',
+    schema: {
+      example: [
+        {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          stakeAmount: 10.0,
+          outcome: 'high_win',
+          payoutAmount: 50.0,
+          createdAt: '2024-01-15T10:30:00Z',
+          netResult: 40.0,
+        },
+        {
+          id: '234e5678-e90b-12d3-a456-426614174001',
+          stakeAmount: 5.0,
+          outcome: 'loss',
+          payoutAmount: 0.0,
+          createdAt: '2024-01-15T09:15:00Z',
+          netResult: -5.0,
+        },
+      ],
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
   async getSpinHistory(@Request() req: any): Promise<any[]> {
     const userId = req.user.id;
     const spins = await this.spinService.getUserSpinHistory(userId);
 
-    // Return sanitized history (exclude sensitive metadata)
-    return spins.map(spin => ({
+    return spins.map((spin) => ({
       id: spin.id,
       stakeAmount: spin.stakeAmount,
       outcome: spin.outcome,
@@ -86,18 +135,35 @@ export class SpinController {
     }));
   }
 
-  /**
-   * Get spin statistics (admin endpoint - would need admin guard in production)
-   *
-   * Returns aggregate statistics including:
-   * - Total spins executed
-   * - Total amount staked
-   * - Total amount paid out
-   * - Distribution of outcomes
-   *
-   * Used for monitoring fairness and business metrics.
-   */
   @Get('stats')
+  @ApiOperation({
+    summary: 'Get spin statistics',
+    description:
+      'Retrieves aggregate spin statistics including total spins, total staked, total paid out, and outcome distribution. Useful for monitoring fairness and business metrics.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Spin statistics retrieved successfully',
+    schema: {
+      example: {
+        totalSpins: 10000,
+        totalStaked: 100000.0,
+        totalPaidOut: 95000.0,
+        houseEdge: 5.0,
+        outcomeDistribution: {
+          jackpot: 10,
+          high_win: 250,
+          medium_win: 1000,
+          low_win: 2500,
+          loss: 6240,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
   async getSpinStatistics(): Promise<any> {
     return this.spinService.getSpinStatistics();
   }

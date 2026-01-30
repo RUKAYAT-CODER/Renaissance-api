@@ -15,16 +15,18 @@ import { LeaderboardModule } from '../leaderboard/leaderboard.module';
 import { WalletModule } from '../wallet/wallet.module';
 
 import { FreeBetVouchersModule } from '../free-bet-vouchers/free-bet-vouchers.module';
+import { SpinModule } from 'src/spin/spin.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Bet, Match]),
     WalletModule,
     FreeBetVouchersModule,
+    SpinModule,
   ],
 
   controllers: [BetsController],
   providers: [BetsService],
   exports: [BetsService],
 })
-export class BetsModule { }
+export class BetsModule {}

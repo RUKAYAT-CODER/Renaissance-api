@@ -1,35 +1,55 @@
 import {
-    IsNumber,
-    IsString,
-    IsEnum,
-    IsOptional,
-    Min,
-    MaxLength,
+  IsNumber,
+  IsString,
+  IsEnum,
+  IsOptional,
+  Min,
+  MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { RewardType } from '../entities/spin-session.entity';
 
-/**
- * DTO for creating a new SpinSession record.
- */
 export class CreateSpinSessionDto {
-    @IsNumber()
-    @Min(0, { message: 'Stake amount must be non-negative' })
-    @Transform(({ value }) => parseFloat(value))
-    stakeAmount: number;
+  @ApiProperty({
+    description: 'Amount staked for this spin session',
+    example: 10.0,
+    minimum: 0,
+  })
+  @IsNumber()
+  @Min(0, { message: 'Stake amount must be non-negative' })
+  @Transform(({ value }) => parseFloat(value))
+  stakeAmount: number;
 
-    @IsEnum(RewardType)
-    @IsOptional()
-    rewardType?: RewardType;
+  @ApiPropertyOptional({
+    description: 'Type of reward received',
+    enum: RewardType,
+    example: RewardType.NFT,
+  })
+  @IsEnum(RewardType)
+  @IsOptional()
+  rewardType?: RewardType;
 
-    @IsNumber()
-    @Min(0)
-    @IsOptional()
-    @Transform(({ value }) => (value !== undefined ? parseFloat(value) : undefined))
-    rewardValue?: number;
+  @ApiPropertyOptional({
+    description: 'Value of the reward',
+    example: 50.0,
+    minimum: 0,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Transform(({ value }) =>
+    value !== undefined ? parseFloat(value) : undefined,
+  )
+  rewardValue?: number;
 
-    @IsString()
-    @IsOptional()
-    @MaxLength(255)
-    txReference?: string;
+  @ApiPropertyOptional({
+    description: 'Transaction reference for the spin',
+    example: 'tx_spin_20240115_abc123',
+    maxLength: 255,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  txReference?: string;
 }
