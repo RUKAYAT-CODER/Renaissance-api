@@ -131,7 +131,7 @@ export class SpinService {
       }
 
       // Deduct stake amount from wallet using the same QueryRunner (locks user's row)
-      await this.walletService.updateUserBalanceWithQueryRunner(
+      const walletResult = await this.walletService.updateUserBalanceWithQueryRunner(
         queryRunner,
         userId,
         -createSpinDto.stakeAmount,
@@ -176,7 +176,7 @@ export class SpinService {
       if (payoutAmount > 0) {
         const isWithdrawable = !createSpinDto.isFreeBet;
 
-        await this.walletService.updateUserBalanceWithQueryRunner(
+        const payoutResult = await this.walletService.updateUserBalanceWithQueryRunner(
           queryRunner,
           userId,
           payoutAmount,

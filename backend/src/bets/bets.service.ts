@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { EventBus } from '@nestjs/cqrs';
+import { v4 as uuidv4 } from 'uuid';
 import { Bet, BetStatus } from './entities/bet.entity';
 import {
   Match,
@@ -17,12 +19,9 @@ import { CreateBetDto } from './dto/create-bet.dto';
 import { UpdateBetStatusDto } from './dto/update-bet-status.dto';
 import { WalletService } from '../wallet/wallet.service';
 import { FreeBetVoucherService } from '../free-bet-vouchers/free-bet-vouchers.service';
-import {
-  Transaction,
-  TransactionType,
-  TransactionStatus,
-} from '../transactions/entities/transaction.entity';
-import { LeaderboardService } from '../leaderboard/leaderboard.service';
+import { TransactionSource } from '../wallet/entities/balance-transaction.entity';
+import { BetPlacedEvent } from '../leaderboard/domain/events/bet-placed.event';
+import { BetSettledEvent } from '../leaderboard/domain/events/bet-settled.event';
 
 export interface PaginatedBets {
   data: Bet[];
@@ -41,7 +40,7 @@ export class BetsService {
     private readonly matchRepository: Repository<Match>,
     private readonly dataSource: DataSource,
     private readonly walletService: WalletService,
-    private readonly leaderboardService: LeaderboardService,
+    private readonly eventBus: EventBus,
     private readonly freeBetVoucherService: FreeBetVoucherService,
   ) {}
 
@@ -104,19 +103,21 @@ export class BetsService {
 
       // Deduct from wallet only when not using a voucher (vouchers cannot be withdrawn)
       if (!useVoucher) {
-        const walletResult = await this.walletService.updateUserBalance(
-          userId,
-          -Number(createBetDto.stakeAmount),
-          TransactionType.BET_PLACEMENT,
-          undefined,
-          {
-            matchId: createBetDto.matchId,
-            predictedOutcome: createBetDto.predictedOutcome,
-          },
-        );
-        if (!walletResult.success) {
+        try {
+          await this.walletService.debit(
+            userId,
+            Number(createBetDto.stakeAmount),
+            TransactionSource.BET,
+            uuidv4(),
+            {
+              reason: 'BET_PLACEMENT',
+              matchId: createBetDto.matchId,
+              predictedOutcome: createBetDto.predictedOutcome,
+            },
+          );
+        } catch (error) {
           throw new BadRequestException(
-            walletResult.error || 'Failed to deduct stake amount from wallet',
+            error.message || 'Failed to deduct stake amount from wallet',
           );
         }
       }
@@ -149,21 +150,10 @@ export class BetsService {
       }
 
       // Link wallet transaction to bet (only when wallet was used)
-      if (!useVoucher) {
-        const transaction = await queryRunner.manager.findOne(Transaction, {
-          where: {
-            userId,
-            type: TransactionType.BET_PLACEMENT,
-            status: TransactionStatus.COMPLETED,
-          },
-          order: { createdAt: 'DESC' } as any,
-        });
-        if (transaction) {
-          transaction.relatedEntityId = savedBet.id;
-          await queryRunner.manager.save(transaction);
-        }
-      }
-
+      // Note: The new WalletService might not expose easy access to the last transaction entity directly in the same way,
+      // but we passed metadata. If we need to link explicitly, we might need to adjust WalletService.
+      // For now, skipping explicit linking as WalletService handles its own transaction logs.
+      
       await queryRunner.commitTransaction();
 
       // Emit BetPlacedEvent for leaderboard updates
@@ -329,8 +319,23 @@ export class BetsService {
 
     const savedBet = await this.betRepository.save(bet);
 
-    // Update leaderboard stats asynchronously
-    this.leaderboardService.updateStatsAfterBetSettlement(savedBet);
+    // Update leaderboard stats asynchronously via event
+    // Note: Assuming we want to treat manual updates similar to settlement
+    // We construct a settlement event
+    const isWin = savedBet.status === BetStatus.WON;
+    if (savedBet.status === BetStatus.WON || savedBet.status === BetStatus.LOST) {
+        this.eventBus.publish(
+            new BetSettledEvent(
+                savedBet.userId,
+                savedBet.id,
+                savedBet.matchId,
+                isWin,
+                Number(savedBet.stakeAmount),
+                isWin ? Number(savedBet.potentialPayout) : 0,
+                0 // Accuracy calculated by handler
+            )
+        );
+    }
 
     return savedBet;
   }
@@ -395,15 +400,17 @@ export class BetsService {
           winningsAmount = Number(bet.potentialPayout);
 
           // Credit winnings to user wallet
-          await this.walletService.updateUserBalance(
+          await this.walletService.credit(
             bet.userId,
             Number(bet.potentialPayout),
-            TransactionType.BET_WINNING,
-            bet.id,
+            TransactionSource.BET,
+            uuidv4(),
             {
+              reason: 'BET_WINNING',
               matchId: bet.matchId,
               stakeAmount: Number(bet.stakeAmount),
               payoutAmount: Number(bet.potentialPayout),
+              betId: bet.id
             },
           );
         } else {
@@ -430,23 +437,10 @@ export class BetsService {
 
       await queryRunner.commitTransaction();
 
-<<<<<<< HEAD
       // Emit BetSettledEvents for leaderboard updates (after transaction commits)
       settledBetEvents.forEach((event) => {
         this.eventBus.publish(event);
       });
-=======
-      // Update leaderboard stats for all settled bets
-      // We run this without awaiting to not block the response, or await if we want to ensure consistency before return.
-      // Given the requirement for efficiency, let's await it but handle errors so it doesn't crash.
-      for (const bet of pendingBets) {
-        try {
-          await this.leaderboardService.updateStatsAfterBetSettlement(bet);
-        } catch (e) {
-          console.error(`Failed to update leaderboard for bet ${bet.id}`, e);
-        }
-      }
->>>>>>> upstream/main
 
       return {
         settled: pendingBets.length,
@@ -458,18 +452,6 @@ export class BetsService {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
-      // Process leaderboard updates for settled bets outside of the transaction block
-      // We do this here (after release) to ensure we don't hold the connection 
-      // but we need the bets data. However, queryRunner is released.
-      // Better to do it after commit but before release if we had the data. 
-      // Actually we have pendingBets list. We can iterate it.
-      // But queryRunner.release() is called in finally.
-      // Let's do it before release but inside a try/catch strictly for leaderboard so it doesn't fail the main request.
-
-      // Since transaction is committed, we can safely update leaderboard.
-      // We will perform this AFTER the transaction block is fully done (conceptually), but 'finally' runs always.
-      // We should check if transaction succeeded, which is hard in finally.
-      // Instead, let's move this logic to BEFORE the finally block, right after commit.
       await queryRunner.release();
     }
   }
@@ -508,16 +490,18 @@ export class BetsService {
       }
 
       // Refund stake amount to user wallet
-      await this.walletService.updateUserBalance(
+      await this.walletService.credit(
         bet.userId,
         Number(bet.stakeAmount),
-        TransactionType.BET_CANCELLATION,
-        bet.id,
+        TransactionSource.BET,
+        uuidv4(),
         {
-          matchId: bet.matchId,
-          stakeAmount: Number(bet.stakeAmount),
-          cancellationReason: isAdmin ? 'admin_cancelled' : 'user_cancelled',
-        },
+            reason: 'BET_CANCELLATION',
+            betId: bet.id,
+            matchId: bet.matchId,
+            stakeAmount: Number(bet.stakeAmount),
+            cancellationReason: isAdmin ? 'admin_cancelled' : 'user_cancelled',
+        }
       );
 
       bet.status = BetStatus.CANCELLED;

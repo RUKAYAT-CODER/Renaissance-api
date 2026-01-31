@@ -27,5 +27,4 @@ export const AppDataSource = new DataSource({
   // Logging for migration debugging
   logging: process.env.NODE_ENV === 'development',
   // Use UUID extension for primary keys
-  uuid: 'uuid',
 });

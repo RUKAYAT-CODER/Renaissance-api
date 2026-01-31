@@ -8,7 +8,16 @@ describe('SpinGameController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SpinGameController],
-      providers: [SpinGameService],
+      providers: [
+        {
+          provide: SpinGameService,
+          useValue: {
+            checkEligibility: jest.fn(),
+            executeSpin: jest.fn(),
+            getUserStatistics: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     controller = module.get<SpinGameController>(SpinGameController);

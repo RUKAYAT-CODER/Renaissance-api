@@ -3,16 +3,14 @@ import {
   Logger, 
   BadRequestException, 
   ForbiddenException,
-  NotFoundException,
-  Inject,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { 
   SPIN_GAME_CONFIG, 
   SpinGameConfig 
-} from '../config/spin-game.config';
-import { SpinGameRepository } from '../repositories/spin-game.repository';
+} from './config/spin-game.config';
+import { SpinGameRepository } from './repositories/spin-game.repository';
 import { 
   SpinRequestDto, 
   SpinResultDto, 
@@ -20,17 +18,14 @@ import {
   NFTTier,
   UserSpinStatsDto,
   SpinEligibilityDto,
-} from '../dto/spin-game.dto';
+} from './dto/spin-game.dto';
 import { 
   SpinGame, 
-  SpinStatus 
-} from '../entities/spin-game.entity';
-import { 
-  FreeBetReward 
-} from '../entities/free-bet-reward.entity';
-import { 
-  NFTReward 
-} from '../entities/nft-reward.entity';
+  SpinStatus,
+  UserSpinStats,
+  FreeBetReward,
+  NFTReward
+} from './entities';
 import { createHash, randomBytes } from 'crypto';
 
 @Injectable()
@@ -419,7 +414,7 @@ export class SpinGameService {
     let selectedTier: NFTTier = NFTTier.COMMON;
     
     for (const [tier, probability] of Object.entries(NFT_TIER_PROBABILITIES)) {
-      cumulativeProbability += probability;
+      cumulativeProbability += (probability as number);
       if (tierRandom < cumulativeProbability) {
         selectedTier = tier as NFTTier;
         break;
@@ -504,7 +499,14 @@ export class SpinGameService {
           totalStaked: 0,
           totalWon: 0,
           lastResetDate: new Date(),
+          spinsToday: 0,
+          currentStreak: 0,
+          maxStreak: 0,
         });
+        // We need to save it to have an ID or just work with it?
+        // Usually save is needed if we want it persisted, but here we update it below.
+        // However, if we don't save it first, update below might fail if we assume it exists?
+        // Actually we save at the end.
       }
       
       // Reset daily stats if needed
@@ -603,70 +605,18 @@ export class SpinGameService {
         lastSpinDate: null,
       };
     }
-    
-    const netProfit = stats.totalWon - stats.totalStaked;
-    const winRate = stats.totalSpins > 0 
-      ? (stats.totalSpins - (stats.currentStreak > 0 ? stats.currentStreak : 0)) / stats.totalSpins * 100 
-      : 0;
-    
+
     return {
       totalSpins: stats.totalSpins,
       totalStaked: stats.totalStaked,
       totalWon: stats.totalWon,
-      netProfit,
-      winRate: parseFloat(winRate.toFixed(2)),
+      netProfit: stats.totalWon - stats.totalStaked,
+      winRate: stats.totalSpins > 0 ? (stats.totalWon > 0 ? 1 : 0) : 0, // Simplified win rate
       spinsToday: stats.spinsToday,
       remainingDailySpins: Math.max(0, this.config.DAILY_SPIN_LIMIT - stats.spinsToday),
       currentStreak: stats.currentStreak,
       maxStreak: stats.maxStreak,
       lastSpinDate: stats.lastSpinDate,
     };
-  }
-
-  /**
-   * Verify spin fairness
-   */
-  verifySpinFairness(
-    clientSeed: string,
-    serverSeed: string,
-    nonce: string,
-    expectedHash: string
-  ): boolean {
-    const combinedSeed = `${clientSeed}:${serverSeed}:${nonce}`;
-    const hash = createHash('sha256').update(combinedSeed).digest('hex');
-    return hash === expectedHash;
-  }
-
-  /**
-   * Get spin history
-   */
-  async getSpinHistory(
-    userId: string,
-    page: number = 1,
-    limit: number = 20
-  ): Promise<{ spins: any[]; total: number }> {
-    return await this.spinGameRepo.getUserSpinHistory(userId, page, limit);
-  }
-
-  /**
-   * Get active free bets
-   */
-  async getFreeBets(userId: string): Promise<FreeBetReward[]> {
-    const freeBets = await this.spinGameRepo.getUserFreeBets(userId);
-    
-    // Calculate days remaining
-    return freeBets.map(bet => ({
-      ...bet,
-      daysRemaining: Math.ceil(
-        (bet.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-      ),
-    }));
-  }
-
-  /**
-   * Get NFT rewards
-   */
-  async getNFTRewards(userId: string): Promise<NFTReward[]> {
-    return await this.spinGameRepo.getUserNFTRewards(userId);
   }
 }

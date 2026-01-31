@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { EventBus } from '@nestjs/cqrs';
 import { StakingService } from './staking.service';
 import { User } from '../users/entities/user.entity';
 import { Transaction } from '../transactions/entities/transaction.entity';
@@ -35,6 +36,10 @@ const mockDataSource = {
   }),
 };
 
+const mockEventBus = {
+  publish: jest.fn(),
+};
+
 describe('StakingService', () => {
   let service: StakingService;
 
@@ -53,6 +58,10 @@ describe('StakingService', () => {
         {
           provide: DataSource,
           useValue: mockDataSource,
+        },
+        {
+          provide: EventBus,
+          useValue: mockEventBus,
         },
       ],
     }).compile();

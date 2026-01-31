@@ -27,5 +27,3 @@ export class CreateSpinDto {
   isFreeBet?: boolean; // When true, any payout should be flagged non-withdrawable
 
 }
-  clientSeed?: string;
-}

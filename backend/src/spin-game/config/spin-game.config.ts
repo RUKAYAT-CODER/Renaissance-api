@@ -1,3 +1,24 @@
+import { NFTTier } from '../dto/spin-game.dto';
+
+export interface XLMRewardTier {
+  name: string;
+  multiplier: number;
+  probability: number;
+  maxAmount: number;
+  withdrawable: boolean;
+  requiresVerification?: boolean;
+  requiresKYC?: boolean;
+}
+
+export interface FreeBetRewardTier {
+  name: string;
+  multiplier: number;
+  probability: number;
+  validityDays: number;
+  withdrawable: boolean;
+  minBetAmount?: number;
+}
+
 export const SPIN_GAME_CONFIG = {
   // Minimum and maximum stakes (in XLM)
   MINIMUM_STAKE: 10,
@@ -69,7 +90,7 @@ export const SPIN_GAME_CONFIG = {
       requiresVerification: true,
       requiresKYC: true
     }
-  ],
+  ] as readonly XLMRewardTier[],
   
   // Free Bet Reward Tiers (Non-Withdrawable)
   FREE_BET_TIERS: [
@@ -95,7 +116,7 @@ export const SPIN_GAME_CONFIG = {
       withdrawable: false,
       minBetAmount: 50
     }
-  ],
+  ] as readonly FreeBetRewardTier[],
   
   // NFT Reward Probabilities (within the 2% NFT chance)
   NFT_TIER_PROBABILITIES: {
