@@ -17,6 +17,10 @@ build-betting:
 	@echo "Building betting contract..."
 	cargo build -p betting --release --target wasm32-unknown-unknown
 
+build-balance-ledger:
+	@echo "Building balance ledger contract..."
+	cargo build -p balance_ledger --release --target wasm32-unknown-unknown
+
 # Run all tests
 test:
 	@echo "Running tests..."
@@ -30,6 +34,10 @@ test-settlement:
 test-betting:
 	@echo "Running betting tests..."
 	cargo test -p betting
+
+test-balance-ledger:
+	@echo "Running balance ledger tests..."
+	cargo test -p balance_ledger
 
 test-common:
 	@echo "Running common tests..."
@@ -65,7 +73,7 @@ install-deps:
 # Optimize WASM files
 optimize:
 	@echo "Optimizing WASM files..."
-	@for contract in settlement betting; do \
+	@for contract in settlement betting balance_ledger; do \
 		if [ -f "target/wasm32-unknown-unknown/release/$${contract}.wasm" ]; then \
 			soroban contract optimize \
 				--wasm target/wasm32-unknown-unknown/release/$${contract}.wasm \
@@ -88,6 +96,13 @@ deploy-betting:
 		--source admin \
 		--network testnet
 
+deploy-balance-ledger:
+	@echo "Deploying balance ledger contract..."
+	soroban contract deploy \
+		--wasm target/wasm32-unknown-unknown/release/balance_ledger.wasm \
+		--source admin \
+		--network testnet
+
 # Help
 help:
 	@echo "Available targets:"
@@ -100,4 +115,6 @@ help:
 	@echo "  make install-deps    - Install development dependencies"
 	@echo "  make optimize        - Optimize WASM files"
 	@echo "  make deploy-*        - Deploy specific contract"
+	@echo "  make test-balance-ledger - Run balance ledger tests"
+	@echo "  make build-balance-ledger - Build balance ledger contract"
 	@echo "  make help            - Show this help message"

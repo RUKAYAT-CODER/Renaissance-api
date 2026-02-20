@@ -4,6 +4,7 @@ members = [
   "contracts/common",
   "contracts/settlement",
   "contracts/betting",
+  "contracts/balance_ledger",
   "contracts/player_card",
 ]
 
