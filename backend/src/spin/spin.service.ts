@@ -11,6 +11,9 @@ import { Spin, SpinStatus, SpinOutcome } from './entities/spin.entity';
 import { CreateSpinDto } from './dto/create-spin.dto';
 import { SpinResultDto } from './dto/spin-result.dto';
 import { WalletService } from '../wallet/wallet.service';
+import { SorobanService } from '../blockchain/soroban.service';
+import { EventBus } from '@nestjs/cqrs';
+import { SpinSettledEvent } from '../../leaderboard/domain/events/spin-settled.event';
 import { TransactionType } from '../transactions/entities/transaction.entity';
 import { RateLimitInteractionService } from '../rate-limit/rate-limit-interaction.service';
 
@@ -73,6 +76,8 @@ export class SpinService {
     private readonly dataSource: DataSource,
     private readonly walletService: WalletService,
     private readonly rateLimitService: RateLimitInteractionService,
+    private readonly sorobanService: SorobanService,
+    private readonly eventBus: EventBus,
   ) {
     // Validate configuration on startup to prevent runtime errors
     if (this.totalWeight !== 1000) {
