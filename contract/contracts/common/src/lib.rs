@@ -11,5 +11,4 @@ pub use enums::*;
 pub use errors::*;
 pub use events::*;
 pub use getters::*;
-pub use view_functions::*;
 pub use idempotency::*;
