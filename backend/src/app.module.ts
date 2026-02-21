@@ -43,6 +43,7 @@ import { SpinGameModule } from './spin-game/spin-game.module';
 import { Leaderboard } from './leaderboard/entities/leaderboard.entity';
 import { CircuitBreakerGuard } from './auth/guards/circuit-breaker.guard';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { EventListenerModule } from './common/events/event-listener.module';
 
 
 @Module({
@@ -102,6 +103,7 @@ import { RateLimitModule } from './rate-limit/rate-limit.module';
     AdminModule,
     ReconciliationModule,
     LoggerModule,
+    EventListenerModule,
   ],
   providers: [
     {
