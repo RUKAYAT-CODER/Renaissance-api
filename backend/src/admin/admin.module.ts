@@ -11,6 +11,7 @@ import { Bet } from '../bets/entities/bet.entity';
 import { User } from '../users/entities/user.entity';
 import { Match } from '../matches/entities/match.entity';
 import { Transaction } from '../transactions/entities/transaction.entity';
+import { RateLimitModule } from '../rate-limit/rate-limit.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { Transaction } from '../transactions/entities/transaction.entity';
       Match,
       Transaction,
     ]),
+    RateLimitModule,
   ],
   controllers: [AdminController, EmergencyController],
   providers: [AdminService, EmergencyPauseService],

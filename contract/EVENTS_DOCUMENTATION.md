@@ -171,6 +171,35 @@ pub struct NFTMintEvent {
 - `timestamp` - For time-based analytics
 - `nft_contract` - For contract-specific analytics
 
+### 7. User Metrics Event (`metrics_updated`)
+Emitted by the balance ledger when cumulative leaderboard metrics are updated.
+
+**Event Topic**: `(metrics_updated, user_address)`
+
+**Payload Structure**:
+```rust
+(
+    staked_delta: i128,
+    won_delta: i128,
+    lost_delta: i128,
+    total_staked: i128,
+    total_won: i128,
+    total_lost: i128,
+)
+```
+
+**Backend Indexing Fields**:
+- `user_address` - User leaderboard identity key
+- `staked_delta` - Per-update staked increment
+- `won_delta` - Per-update winnings increment
+- `lost_delta` - Per-update losses increment
+- `total_staked` - Canonical cumulative staked amount
+- `total_won` - Canonical cumulative winnings amount
+- `total_lost` - Canonical cumulative loss amount
+
+**Reconstruction Rule**:
+- Backend can replay `metrics_updated` events in ledger order and trust the latest cumulative tuple as canonical.
+
 ## Consistent Fields Across Events
 
 All events include these standardized fields:

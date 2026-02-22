@@ -36,6 +36,8 @@ import { OwnershipGuard } from '../common/guards/ownership.guard';
 import { UserRole } from '../users/entities/user.entity';
 import { Bet } from './entities/bet.entity';
 import { CriticalAction } from '../common/decorators/critical-action.decorator';
+import { RateLimitInteractionGuard } from '../rate-limit/guards/rate-limit-interaction.guard';
+import { RateLimitAction } from '../rate-limit/decorators/rate-limit-action.decorator';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -54,6 +56,8 @@ export class BetsController {
 
   @Post()
   @CriticalAction('bets.place')
+  @UseGuards(RateLimitInteractionGuard)
+  @RateLimitAction('stake')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Place a bet on a match',

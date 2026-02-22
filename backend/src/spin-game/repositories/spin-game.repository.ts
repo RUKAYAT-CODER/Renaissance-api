@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Between, LessThanOrEqual } from 'typeorm';
+import { Repository, DataSource, Between, MoreThan } from 'typeorm';
 import { SpinGame, RewardType, SpinStatus } from '../entities/spin-game.entity';
 import { UserSpinStats } from '../entities/user-spin-stats.entity';
 import { FreeBetReward } from '../entities/free-bet-reward.entity';
@@ -111,7 +111,7 @@ export class SpinGameRepository {
       where: {
         userId,
         isUsed: false,
-        expiresAt: LessThanOrEqual(new Date()),
+        expiresAt: MoreThan(new Date()),
       },
       order: { createdAt: 'DESC' },
     });

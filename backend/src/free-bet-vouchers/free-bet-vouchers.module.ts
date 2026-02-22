@@ -3,10 +3,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FreeBetVouchersController } from './free-bet-vouchers.controller';
 import { FreeBetVoucherService } from './free-bet-vouchers.service';
 import { FreeBetVoucher } from './entities/free-bet-voucher.entity';
-import { User } from '../users/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([FreeBetVoucher, User])],
+  imports: [TypeOrmModule.forFeature([FreeBetVoucher])],
   controllers: [FreeBetVouchersController],
   providers: [FreeBetVoucherService],
   exports: [FreeBetVoucherService],

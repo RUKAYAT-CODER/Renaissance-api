@@ -6,25 +6,33 @@ import {
   UseGuards,
   Request,
   Get,
+  Patch,
   Query,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
 import { CancelBetDto, CorrectBalanceDto, CorrectMatchDto } from './dto/admin.dto';
+import { UpdateRateLimitCooldownDto } from './dto/rate-limit-config.dto';
 import { Bet } from '../bets/entities/bet.entity';
 import { User } from '../users/entities/user.entity';
 import { Match } from '../matches/entities/match.entity';
 import { AdminAuditLog, AdminActionType } from './entities/admin-audit-log.entity';
+import { RateLimitInteractionService } from '../rate-limit/rate-limit-interaction.service';
 
+@ApiTags('Admin')
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly rateLimitService: RateLimitInteractionService,
+  ) {}
 
   /**
    * Cancel a pending bet and refund the stake
@@ -111,5 +119,35 @@ export class AdminController {
       page,
       limit,
     };
+  }
+
+  /**
+   * Get interaction rate-limit config (cooldown between spin/stake per user)
+   * GET /admin/rate-limit
+   */
+  @Get('rate-limit')
+  @ApiOperation({ summary: 'Get rate-limit cooldown config' })
+  @ApiResponse({ status: 200, description: 'Current cooldown in seconds' })
+  async getRateLimitConfig(): Promise<{ cooldownSeconds: number }> {
+    const cooldownSeconds = await this.rateLimitService.getCooldownSeconds();
+    return { cooldownSeconds };
+  }
+
+  /**
+   * Update interaction rate-limit cooldown (admin-configurable)
+   * PATCH /admin/rate-limit
+   */
+  @Patch('rate-limit')
+  @ApiOperation({ summary: 'Update rate-limit cooldown (seconds)' })
+  @ApiBody({ type: UpdateRateLimitCooldownDto })
+  @ApiResponse({ status: 200, description: 'Cooldown updated' })
+  async updateRateLimitConfig(
+    @Body() dto: UpdateRateLimitCooldownDto,
+    @Request() req: any,
+  ): Promise<{ cooldownSeconds: number }> {
+    return this.rateLimitService.setCooldownSeconds(
+      dto.cooldownSeconds,
+      req.user?.id ?? req.user?.userId ?? 'admin',
+    );
   }
 }

@@ -50,6 +50,9 @@ export class Spin extends BaseEntity {
     weightedProbabilities?: Record<string, number>;
     clientTimestamp?: Date;
     serverTimestamp?: Date;
+    rewardChannel?: 'XLM' | 'NFT' | 'FREE_BET';
+    voucherId?: string;
+    [key: string]: any;
   };
 
   // ...BaseEntity fields: id, createdAt, updatedAt, deletedAt

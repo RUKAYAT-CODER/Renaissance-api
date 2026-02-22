@@ -22,10 +22,19 @@ pub struct UserBalance {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UserMetrics {
+    pub total_staked: i128,
+    pub total_won: i128,
+    pub total_lost: i128,
+}
+
+#[contracttype]
 #[derive(Clone)]
 enum DataKey {
     BackendSigner,
     Balance(Address),
+    Metrics(Address),
 }
 
 #[contract]
@@ -142,6 +151,43 @@ impl BalanceLedgerContract {
         checked_add(balance.withdrawable, balance.locked)
     }
 
+    pub fn record_metrics(
+        env: Env,
+        user: Address,
+        staked_delta: i128,
+        won_delta: i128,
+        lost_delta: i128,
+    ) -> Result<UserMetrics, BalanceLedgerError> {
+        Self::require_backend_auth(&env)?;
+        validate_non_negative(staked_delta)?;
+        validate_non_negative(won_delta)?;
+        validate_non_negative(lost_delta)?;
+
+        let previous = get_user_metrics(&env, &user);
+
+        let updated = UserMetrics {
+            total_staked: checked_add(previous.total_staked, staked_delta)?,
+            total_won: checked_add(previous.total_won, won_delta)?,
+            total_lost: checked_add(previous.total_lost, lost_delta)?,
+        };
+
+        store_user_metrics(&env, &user, &updated);
+        publish_metrics_updated_event(
+            &env,
+            &user,
+            staked_delta,
+            won_delta,
+            lost_delta,
+            &updated,
+        );
+
+        Ok(updated)
+    }
+
+    pub fn get_metrics(env: Env, user: Address) -> UserMetrics {
+        get_user_metrics(&env, &user)
+    }
+
     fn require_backend_auth(env: &Env) -> Result<(), BalanceLedgerError> {
         let storage = env.storage().persistent();
         let backend_signer: Address = storage
@@ -207,6 +253,23 @@ fn store_user_balance(env: &Env, user: &Address, balance: &UserBalance) {
         .set(&DataKey::Balance(user.clone()), balance);
 }
 
+fn get_user_metrics(env: &Env, user: &Address) -> UserMetrics {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Metrics(user.clone()))
+        .unwrap_or(UserMetrics {
+            total_staked: 0,
+            total_won: 0,
+            total_lost: 0,
+        })
+}
+
+fn store_user_metrics(env: &Env, user: &Address, metrics: &UserMetrics) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::Metrics(user.clone()), metrics);
+}
+
 fn publish_balance_updated_event(
     env: &Env,
     user: &Address,
@@ -220,6 +283,27 @@ fn publish_balance_updated_event(
             previous.locked,
             updated.withdrawable,
             updated.locked,
+        ),
+    );
+}
+
+fn publish_metrics_updated_event(
+    env: &Env,
+    user: &Address,
+    staked_delta: i128,
+    won_delta: i128,
+    lost_delta: i128,
+    totals: &UserMetrics,
+) {
+    env.events().publish(
+        (Symbol::new(env, "metrics_updated"), user.clone()),
+        (
+            staked_delta,
+            won_delta,
+            lost_delta,
+            totals.total_staked,
+            totals.total_won,
+            totals.total_lost,
         ),
     );
 }

@@ -1,4 +1,12 @@
-import { IsUUID, IsNumber, IsPositive, IsDateString, IsOptional } from 'class-validator';
+import {
+  IsUUID,
+  IsNumber,
+  IsPositive,
+  IsDateString,
+  IsOptional,
+  IsInt,
+  Min,
+} from 'class-validator';
 
 export class CreateFreeBetVoucherDto {
   @IsUUID()
@@ -13,4 +21,9 @@ export class CreateFreeBetVoucherDto {
 
   @IsOptional()
   metadata?: Record<string, any>;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxActiveVouchersPerUser?: number;
 }

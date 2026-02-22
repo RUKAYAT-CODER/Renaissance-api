@@ -22,6 +22,7 @@ import { FreeBetVoucherService } from '../free-bet-vouchers/free-bet-vouchers.se
 import { TransactionSource } from '../wallet/entities/balance-transaction.entity';
 import { BetPlacedEvent } from '../leaderboard/domain/events/bet-placed.event';
 import { BetSettledEvent } from '../leaderboard/domain/events/bet-settled.event';
+import { RateLimitInteractionService } from '../rate-limit/rate-limit-interaction.service';
 
 export interface PaginatedBets {
   data: Bet[];
@@ -42,6 +43,7 @@ export class BetsService {
     private readonly walletService: WalletService,
     private readonly eventBus: EventBus,
     private readonly freeBetVoucherService: FreeBetVoucherService,
+    private readonly rateLimitService: RateLimitInteractionService,
   ) {}
 
 
@@ -86,6 +88,7 @@ export class BetsService {
       // Resolve free bet voucher if provided. Vouchers: non-withdrawable, betting only, auto-consumed on use.
       let useVoucher = false;
       let voucherId: string | undefined;
+      let voucherIsWithdrawable = false;
       if (createBetDto.voucherId) {
         const voucher = await this.freeBetVoucherService.validateVoucher(
           createBetDto.voucherId,
@@ -99,6 +102,7 @@ export class BetsService {
         }
         useVoucher = true;
         voucherId = createBetDto.voucherId;
+        voucherIsWithdrawable = Boolean(voucher.metadata?.isWithdrawable);
       }
 
       // Deduct from wallet only when not using a voucher (vouchers cannot be withdrawn)
@@ -135,14 +139,21 @@ export class BetsService {
         odds,
         potentialPayout,
         status: BetStatus.PENDING,
-        metadata: useVoucher ? { voucherId, isFreeBet: true } : undefined,
+        metadata: useVoucher
+          ? {
+              voucherId,
+              isFreeBet: true,
+              isVoucherWithdrawable: voucherIsWithdrawable,
+            }
+          : undefined,
       });
 
       const savedBet = await queryRunner.manager.save(bet);
 
       // Automatically consume voucher on use
       if (useVoucher && voucherId) {
-        await this.freeBetVoucherService.consumeVoucher(
+        await this.freeBetVoucherService.consumeVoucherWithManager(
+          queryRunner.manager,
           voucherId,
           userId,
           savedBet.id,
@@ -165,6 +176,8 @@ export class BetsService {
           createBetDto.predictedOutcome,
         ),
       );
+
+      await this.rateLimitService.recordInteraction(userId);
 
       return savedBet;
     } catch (error) {
@@ -396,23 +409,40 @@ export class BetsService {
           // Winner - distribute payout
           bet.status = BetStatus.WON;
           won++;
-          totalPayout += Number(bet.potentialPayout);
-          winningsAmount = Number(bet.potentialPayout);
+          const isFreeBet = Boolean(bet.metadata?.isFreeBet);
+          const isVoucherWithdrawable = Boolean(
+            bet.metadata?.isVoucherWithdrawable,
+          );
+
+          if (isFreeBet && !isVoucherWithdrawable) {
+            // Non-withdrawable voucher bets can only cash out profit, not promotional stake.
+            winningsAmount = Math.max(
+              0,
+              Number(bet.potentialPayout) - Number(bet.stakeAmount),
+            );
+          } else {
+            winningsAmount = Number(bet.potentialPayout);
+          }
+          totalPayout += winningsAmount;
 
           // Credit winnings to user wallet
-          await this.walletService.credit(
-            bet.userId,
-            Number(bet.potentialPayout),
-            TransactionSource.BET,
-            uuidv4(),
-            {
-              reason: 'BET_WINNING',
-              matchId: bet.matchId,
-              stakeAmount: Number(bet.stakeAmount),
-              payoutAmount: Number(bet.potentialPayout),
-              betId: bet.id
-            },
-          );
+          if (winningsAmount > 0) {
+            await this.walletService.credit(
+              bet.userId,
+              winningsAmount,
+              TransactionSource.BET,
+              uuidv4(),
+              {
+                reason: 'BET_WINNING',
+                matchId: bet.matchId,
+                stakeAmount: Number(bet.stakeAmount),
+                payoutAmount: winningsAmount,
+                betId: bet.id,
+                isFreeBet,
+                isVoucherWithdrawable,
+              },
+            );
+          }
         } else {
           // Loser - no payout
           bet.status = BetStatus.LOST;
@@ -490,19 +520,36 @@ export class BetsService {
       }
 
       // Refund stake amount to user wallet
-      await this.walletService.credit(
-        bet.userId,
-        Number(bet.stakeAmount),
-        TransactionSource.BET,
-        uuidv4(),
-        {
+      const isFreeBet = Boolean(bet.metadata?.isFreeBet);
+      const isVoucherWithdrawable = Boolean(
+        bet.metadata?.isVoucherWithdrawable,
+      );
+      const voucherId = bet.metadata?.voucherId as string | undefined;
+
+      if (isFreeBet && voucherId && !isVoucherWithdrawable) {
+        await this.freeBetVoucherService.restoreVoucherWithManager(
+          queryRunner.manager,
+          voucherId,
+          bet.userId,
+          bet.id,
+        );
+      } else {
+        await this.walletService.credit(
+          bet.userId,
+          Number(bet.stakeAmount),
+          TransactionSource.BET,
+          uuidv4(),
+          {
             reason: 'BET_CANCELLATION',
             betId: bet.id,
             matchId: bet.matchId,
             stakeAmount: Number(bet.stakeAmount),
             cancellationReason: isAdmin ? 'admin_cancelled' : 'user_cancelled',
-        }
-      );
+            isFreeBet,
+            isVoucherWithdrawable,
+          },
+        );
+      }
 
       bet.status = BetStatus.CANCELLED;
       bet.settledAt = new Date();

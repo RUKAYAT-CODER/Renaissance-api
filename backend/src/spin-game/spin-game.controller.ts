@@ -17,6 +17,8 @@ import {
 } from './dto/spin-game.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CriticalAction } from '../common/decorators/critical-action.decorator';
+import { RateLimitInteractionGuard } from '../rate-limit/guards/rate-limit-interaction.guard';
+import { RateLimitAction } from '../rate-limit/decorators/rate-limit-action.decorator';
 
 @ApiTags('Spin Game')
 @Controller('spin-game')
@@ -33,11 +35,13 @@ export class SpinGameController {
     description: 'Returns eligibility status and remaining limits'
   })
   async checkEligibility(@Req() req: any): Promise<SpinEligibilityDto> {
-    return this.spinGameService.checkEligibility(req.user.id);
+    return this.spinGameService.checkEligibility(req.user.userId ?? req.user.id);
   }
 
   @Post('spin')
   @CriticalAction('spin_game.spin')
+  @UseGuards(RateLimitInteractionGuard)
+  @RateLimitAction('spin_game')
   @ApiOperation({ summary: 'Execute a spin' })
   @ApiResponse({ 
     status: HttpStatus.CREATED, 
@@ -48,7 +52,7 @@ export class SpinGameController {
     @Req() req: any, 
     @Body() dto: SpinRequestDto
   ): Promise<SpinResultDto> {
-    return this.spinGameService.executeSpin(req.user.id, dto);
+    return this.spinGameService.executeSpin(req.user.userId ?? req.user.id, dto);
   }
 
   @Get('stats')
@@ -59,6 +63,6 @@ export class SpinGameController {
     description: 'Returns user statistics including total spins, wins, and profit'
   })
   async getStats(@Req() req: any): Promise<UserSpinStatsDto> {
-    return this.spinGameService.getUserStatistics(req.user.id);
+    return this.spinGameService.getUserStatistics(req.user.userId ?? req.user.id);
   }
 }

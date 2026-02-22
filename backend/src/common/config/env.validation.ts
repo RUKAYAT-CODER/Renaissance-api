@@ -87,6 +87,43 @@ class EnvironmentVariables {
 
   @IsString()
   SOROBAN_ADMIN_SECRET: string;
+
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' || value === true)
+  CONTRACT_EVENTS_ENABLED?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(100)
+  CONTRACT_EVENTS_POLL_INTERVAL_MS?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  CONTRACT_EVENTS_PAGE_LIMIT?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  CONTRACT_EVENTS_PROCESSING_RETRY_ATTEMPTS?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(100)
+  CONTRACT_EVENTS_RECONNECT_BASE_DELAY_MS?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(100)
+  CONTRACT_EVENTS_RECONNECT_MAX_DELAY_MS?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  CONTRACT_EVENTS_START_LEDGER?: number;
 }
 
 export function validate(config: Record<string, unknown>) {

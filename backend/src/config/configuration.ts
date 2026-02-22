@@ -34,5 +34,23 @@ export default () => ({
       contractId: process.env.SOROBAN_CONTRACT_ID,
       adminSecret: process.env.SOROBAN_ADMIN_SECRET,
     },
+    events: {
+      enabled: process.env.CONTRACT_EVENTS_ENABLED !== 'false',
+      pollIntervalMs: parseInt(process.env.CONTRACT_EVENTS_POLL_INTERVAL_MS || '5000', 10),
+      pageLimit: parseInt(process.env.CONTRACT_EVENTS_PAGE_LIMIT || '100', 10),
+      processingRetryAttempts: parseInt(
+        process.env.CONTRACT_EVENTS_PROCESSING_RETRY_ATTEMPTS || '3',
+        10,
+      ),
+      reconnectBaseDelayMs: parseInt(
+        process.env.CONTRACT_EVENTS_RECONNECT_BASE_DELAY_MS || '1000',
+        10,
+      ),
+      reconnectMaxDelayMs: parseInt(
+        process.env.CONTRACT_EVENTS_RECONNECT_MAX_DELAY_MS || '30000',
+        10,
+      ),
+      startLedger: parseInt(process.env.CONTRACT_EVENTS_START_LEDGER || '0', 10),
+    },
   },
 });

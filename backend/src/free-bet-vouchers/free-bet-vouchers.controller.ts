@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -17,6 +19,7 @@ import {
   PaginatedVouchers,
 } from './free-bet-vouchers.service';
 import { CreateFreeBetVoucherDto } from './dto/create-free-bet-voucher.dto';
+import { UpdateFreeBetVoucherDto } from './dto/update-free-bet-voucher.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard, Roles } from '../common/guards/roles.guard';
 import { UserRole } from '../users/entities/user.entity';
@@ -115,9 +118,32 @@ export class FreeBetVouchersController {
     @Param('voucherId', ParseUUIDPipe) voucherId: string,
     @Req() req: AuthenticatedRequest,
   ): Promise<FreeBetVoucher> {
+    const requesterUserId =
+      req.user.role === UserRole.ADMIN ? undefined : req.user.userId;
+
     return this.freeBetVoucherService.getVoucherById(
       voucherId,
-      req.user.userId,
+      requesterUserId,
     );
+  }
+
+  @Patch(':voucherId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async updateVoucher(
+    @Param('voucherId', ParseUUIDPipe) voucherId: string,
+    @Body() dto: UpdateFreeBetVoucherDto,
+  ): Promise<FreeBetVoucher> {
+    return this.freeBetVoucherService.updateVoucher(voucherId, dto);
+  }
+
+  @Delete(':voucherId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async deleteVoucher(
+    @Param('voucherId', ParseUUIDPipe) voucherId: string,
+  ): Promise<{ message: string }> {
+    await this.freeBetVoucherService.deleteVoucher(voucherId);
+    return { message: 'Voucher deleted successfully' };
   }
 }

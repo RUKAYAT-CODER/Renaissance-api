@@ -8,6 +8,7 @@ import { LeaderboardModule } from '../leaderboard/leaderboard.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { FreeBetVouchersModule } from '../free-bet-vouchers/free-bet-vouchers.module';
 import { SpinModule } from '../spin/spin.module';
+import { RateLimitModule } from '../rate-limit/rate-limit.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SpinModule } from '../spin/spin.module';
     WalletModule,
     FreeBetVouchersModule,
     SpinModule,
+    RateLimitModule,
   ],
   controllers: [BetsController],
   providers: [BetsService],

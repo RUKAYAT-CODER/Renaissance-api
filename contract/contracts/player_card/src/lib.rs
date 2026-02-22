@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec, U256, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Symbol, U256, Vec};
 
 mod errors;
 mod events;
@@ -12,7 +12,10 @@ pub use events::*;
 pub use storage::*;
 pub use token::*;
 
-use common::{NFTMintEvent, NFT_MINT_EVENT, create_nft_mint_event};
+use common::{
+    cleanup_operation, create_nft_mint_event, ensure_not_replayed, is_operation_executed,
+    ContractError, NFTMintEvent, NFT_MINT_EVENT,
+};
 
 #[contract]
 pub struct PlayerCardContract;
@@ -42,10 +45,23 @@ impl PlayerCardContract {
         env.events().publish((NFT_MINT_EVENT,), event);
     }
 
-    /// Mint a new player card NFT to the specified recipient
-    pub fn mint(env: Env, to: Address, token_uri: String) -> u64 {
+    /// Mint a new player card NFT to the specified recipient.
+    /// operation_hash must be unique to guarantee idempotent execution.
+    pub fn mint(
+        env: Env,
+        operation_hash: BytesN<32>,
+        to: Address,
+        token_uri: String,
+        ttl_seconds: Option<u64>,
+    ) -> Result<u64, ContractError> {
         let admin = storage::get_admin(&env);
         admin.require_auth();
+        ensure_not_replayed(
+            &env,
+            Symbol::new(&env, "nft_mint"),
+            operation_hash,
+            ttl_seconds,
+        )?;
 
         let token_id = storage::get_next_token_id(&env);
         storage::increment_next_token_id(&env);
@@ -68,7 +84,15 @@ impl PlayerCardContract {
 
         env.events().publish((NFT_MINT_EVENT,), event_with_timestamp);
 
-        token_id
+        Ok(token_id)
+    }
+
+    pub fn is_mint_operation_executed(env: Env, operation_hash: BytesN<32>) -> bool {
+        is_operation_executed(&env, Symbol::new(&env, "nft_mint"), operation_hash)
+    }
+
+    pub fn cleanup_mint_operation(env: Env, operation_hash: BytesN<32>) -> bool {
+        cleanup_operation(&env, Symbol::new(&env, "nft_mint"), operation_hash)
     }
 
     /// Transfer ownership of a token from one address to another
@@ -114,5 +138,69 @@ impl PlayerCardContract {
     /// Get all tokens owned by a specific address
     pub fn tokens_of_owner(env: Env, owner: Address) -> Vec<u64> {
         storage::get_tokens_of_owner(&env, owner)
+    }
+
+    // ===== BACKEND VERIFICATION GETTERS =====
+
+    /// Get user's NFT balance (number of tokens owned)
+    /// Read-only getter for backend verification
+    pub fn get_user_nft_balance(env: Env, user: Address) -> u64 {
+        let tokens = storage::get_tokens_of_owner(&env, user.clone());
+        tokens.len() as u64
+    }
+
+    /// Get user's NFT portfolio summary
+    /// Read-only getter for backend verification
+    pub fn get_user_nft_portfolio(env: Env, user: Address) -> Vec<u64> {
+        storage::get_tokens_of_owner(&env, user)
+    }
+
+    /// Get NFT contract statistics
+    /// Read-only getter for backend verification
+    pub fn get_nft_contract_stats(env: Env) -> (u64, Address) {
+        let total_supply = storage::get_next_token_id(&env) - 1;
+        let admin = storage::get_admin(&env);
+        (total_supply, admin)
+    }
+
+    /// Check if a token exists
+    /// Read-only getter for backend verification
+    pub fn token_exists(env: Env, token_id: u64) -> bool {
+        let key = (String::from_str(&env, "TOKEN_OWNER"), token_id);
+        env.storage().instance().has(&key)
+    }
+
+    /// Get token metadata in a structured format
+    /// Read-only getter for backend verification
+    pub fn get_token_metadata(env: Env, token_id: u64) -> (Address, String) {
+        let owner = storage::get_owner(&env, token_id);
+        let uri = storage::get_token_uri(&env, token_id);
+        (owner, uri)
+    }
+
+    /// Get multiple token owners efficiently
+    /// Read-only getter for backend verification (gas-efficient batch operation)
+    pub fn get_multiple_token_owners(env: Env, token_ids: Vec<u64>) -> Vec<Address> {
+        let mut owners = Vec::new(&env);
+        for token_id in token_ids.iter() {
+            let owner = storage::get_owner(&env, token_id);
+            owners.push_back(owner);
+        }
+        owners
+    }
+
+    /// Get user's NFT balance with metadata
+    /// Read-only getter for backend verification
+    pub fn get_user_nft_balance_md(env: Env, user: Address) -> (u64, Vec<(u64, String)>) {
+        let token_ids = storage::get_tokens_of_owner(&env, user.clone());
+        let balance = token_ids.len() as u64;
+        
+        let mut token_metadata = Vec::new(&env);
+        for token_id in token_ids.iter() {
+            let uri = storage::get_token_uri(&env, token_id);
+            token_metadata.push_back((token_id, uri));
+        }
+        
+        (balance, token_metadata)
     }
 }

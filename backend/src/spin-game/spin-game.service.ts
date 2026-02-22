@@ -11,6 +11,7 @@ import {
   SpinGameConfig 
 } from './config/spin-game.config';
 import { SpinGameRepository } from './repositories/spin-game.repository';
+import { RateLimitInteractionService } from '../rate-limit/rate-limit-interaction.service';
 import { 
   SpinRequestDto, 
   SpinResultDto, 
@@ -27,6 +28,7 @@ import {
   NFTReward
 } from './entities';
 import { createHash, randomBytes } from 'crypto';
+import { FreeBetVoucherService } from '../free-bet-vouchers/free-bet-vouchers.service';
 
 @Injectable()
 export class SpinGameService {
@@ -37,6 +39,8 @@ export class SpinGameService {
     private readonly spinGameRepo: SpinGameRepository,
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
+    private readonly rateLimitService: RateLimitInteractionService,
+    private readonly freeBetVoucherService: FreeBetVoucherService,
   ) {}
 
   /**
@@ -177,6 +181,8 @@ export class SpinGameService {
 
     // Check for suspicious activity
     await this.checkForSuspiciousActivity(userId, spinResult);
+
+    await this.rateLimitService.recordInteraction(userId);
 
     return {
       spinId: spinResult.id,
@@ -379,13 +385,15 @@ export class SpinGameService {
     // Create free bet with expiry
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + selectedTier.validityDays);
-    
-    const freeBet = await this.spinGameRepo.createFreeBet({
+
+    const freeBet = await this.freeBetVoucherService.createVoucher({
       userId,
       amount: freeBetAmount,
-      expiresAt,
-      source: 'SPIN_GAME',
-      isWithdrawable: selectedTier.withdrawable,
+      expiresAt: expiresAt.toISOString(),
+      metadata: {
+        source: 'SPIN_GAME',
+        isWithdrawable: selectedTier.withdrawable,
+      },
     });
     
     return {

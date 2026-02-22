@@ -235,6 +235,69 @@ export class LeaderboardService {
   }
 
   /**
+   * Handle spin settled events
+   * Updates betting-like statistics for leaderboard (atomic)
+   */
+  async handleSpinSettled(event: import('./domain/events').SpinSettledEvent): Promise<void> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const leaderboard = await queryRunner.manager.findOne(Leaderboard, {
+        where: { userId: event.userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!leaderboard) {
+        const newLeaderboard = queryRunner.manager.create(Leaderboard, {
+          userId: event.userId,
+        });
+        // initialize based on spin
+        newLeaderboard.totalBets = 1;
+        if (event.isWin) {
+          newLeaderboard.betsWon = 1;
+          newLeaderboard.totalWinnings = event.payoutAmount;
+        } else {
+          newLeaderboard.betsLost = 1;
+        }
+        newLeaderboard.recalculateAccuracy();
+        await queryRunner.manager.save(newLeaderboard);
+      } else {
+        leaderboard.totalBets++;
+
+        if (event.isWin) {
+          leaderboard.betsWon++;
+          leaderboard.totalWinnings += event.payoutAmount;
+        } else {
+          leaderboard.betsLost++;
+        }
+
+        leaderboard.recalculateAccuracy();
+        leaderboard.updateWinningStreak(event.isWin);
+
+        leaderboard.lastBetAt = event.timestamp;
+
+        await queryRunner.manager.save(leaderboard);
+      }
+
+      await queryRunner.commitTransaction();
+      this.logger.debug(
+        `Updated leaderboard for spin settled - User: ${event.userId}, Win: ${event.isWin}, Winnings: ${event.payoutAmount}`,
+      );
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(
+        `Failed to handle spin settled event for user ${event.userId}:`,
+        error,
+      );
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
    * Get user's leaderboard stats
    */
   async getLeaderboardStats(userId: string): Promise<Leaderboard | null> {
