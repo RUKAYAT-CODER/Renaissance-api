@@ -47,6 +47,8 @@ import { AuditModule } from './audit/audit.module';
 import { CircuitBreakerGuard } from './auth/guards/circuit-breaker.guard';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { EventListenerModule } from './common/events/event-listener.module';
+import { BetSettlementModule } from './bet-settlement/bet-settlement.module';
+import { OddsModule } from './odds/odds.module';
 // import { NFTModule } from './nft/nft.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { GamificationModule } from './gamification/gamification.module';
@@ -104,6 +106,11 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
     ]),
     SpinGameModule,
     RateLimitModule,
+    AuthModule,
+    MatchesModule,
+    BetsModule,
+    BetSettlementModule,
+    OddsModule,
     StakingModule,
     LeaderboardModule,
     FreeBetVouchersModule,
