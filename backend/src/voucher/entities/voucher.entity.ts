@@ -50,4 +50,6 @@ export class Voucher {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  
 }

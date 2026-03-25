@@ -112,4 +112,30 @@ export class VoucherService {
       },
     );
   }
+
+  async createVoucher(dto: CreateVoucherDto, campaignId?: string) {
+  const voucher = this.voucherRepo.create({
+    ...dto,
+    code: this.generateCode(),
+    campaign: campaignId ? { id: campaignId } : null,
+  });
+
+  return this.voucherRepo.save(voucher);
+}
+
+// 🔥 Bulk generation (for promotions)
+async generateBulk(count: number, dto: CreateVoucherDto) {
+  const vouchers = [];
+
+  for (let i = 0; i < count; i++) {
+    vouchers.push(
+      this.voucherRepo.create({
+        ...dto,
+        code: this.generateCode(),
+      }),
+    );
+  }
+
+  return this.voucherRepo.save(vouchers);
+}
 }
