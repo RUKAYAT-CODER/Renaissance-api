@@ -102,7 +102,7 @@
       "json",
       "ts"
     ],
-    "rootDir": "src",
+    "rootDir": ".",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
@@ -111,9 +111,14 @@
       "^uuid$": "uuid"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "src/**/*.ts",
+      "!src/**/*.module.ts",
+      "!src/main.ts",
+      "!src/**/*.entity.ts",
+      "!src/**/*.dto.ts"
     ],
-    "coverageDirectory": "../coverage",
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["text", "lcov", "html"],
     "coverageThreshold": {
       "global": {
         "branches": 80,
@@ -122,6 +127,7 @@
         "statements": 80
       }
     },
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "setupFilesAfterEnv": ["<rootDir>/test/setup.ts"]
   }
 }
