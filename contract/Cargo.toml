@@ -8,6 +8,7 @@ members = [
   "contracts/settlement",
   "contracts/staking",
   "contracts/treasury",
+  "contracts/team_governance",
 ]
 
 [workspace.dependencies]
