@@ -51,6 +51,9 @@ import { TreasuryModule } from './treasury/treasury.module';
 import { StakingModule } from './stake/staking.module';
 import { PlayerModule } from './player/player.module';
 import { DatabaseModule } from './database/database.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { FraudModule } from './fraud/fraud.module';
 
 @Module({
   imports: [
@@ -119,6 +122,9 @@ import { DatabaseModule } from './database/database.module';
     TreasuryModule,
     StakingModule,
     PlayerModule,
+    AnalyticsModule,
+    NotificationsModule,
+    FraudModule,
   ],
   providers: [
     {
